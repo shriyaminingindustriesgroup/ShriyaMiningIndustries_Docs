@@ -420,3 +420,75 @@ the app.
 - SWA app setting support for Key Vault references not yet empirically verified.
 - Azure AD admin not yet configured on the SQL server (blocks passwordless/Managed Identity SQL
   auth, §11's longer-term plan).
+
+---
+
+## 15. Local development — running the API from a fresh clone
+
+**If you've just cloned `ShriyaMiningIndustries_api` and want to run it locally with the
+interactive Swagger UI, this section is everything you need.** Verified end-to-end, not
+theoretical — every step here was actually run successfully before being written down.
+
+### 15.1 Prerequisites
+
+| Tool | Version | Install |
+|---|---|---|
+| .NET SDK | 10.0.x | https://dotnet.microsoft.com/download — no `global.json` pins a specific SDK, any .NET 10 SDK works |
+| Azure Functions Core Tools | v4 | `npm install -g azure-functions-core-tools@4` |
+| Azurite (local storage emulator) | any recent | `npm install -g azurite`, then run `azurite` in its own terminal (or use the Azurite extension in VS Code) |
+| A SQL connection string | — | ask an existing team member for the `shriyaminingdbtest` connection string, and ask them to add your current public IP as a SQL Server firewall rule (same server as production, different database — see §5). **Never** request or use the production (`shriyaminingdb`) connection string for local development. |
+
+### 15.2 One-time setup
+
+1. `git clone https://github.com/shriyaminingindustriesgroup/ShriyaMiningIndustries_api.git`
+2. Copy the template and fill in the real connection string someone gave you:
+   ```
+   cd src/ShriyaMiningIndustries.Api
+   cp local.settings.json.example local.settings.json
+   ```
+   `local.settings.json` is git-ignored — it will never be committed, and the repo only ever
+   ships the `.example` template (no real values in it). **Never commit a filled-in
+   `local.settings.json`.**
+3. Make sure Azurite is running (`azurite` in a separate terminal, defaults are fine —
+   `AzureWebJobsStorage` in the template already points at it via `UseDevelopmentStorage=true`).
+
+### 15.3 Run it
+
+```
+cd src/ShriyaMiningIndustries.Api
+dotnet run --configuration Release
+```
+
+**Use `dotnet run`, not `func start`.** `func start` run directly against this project prints its
+own warning that it may not correctly load function extensions for a .NET isolated-worker
+project — `dotnet run` is what was actually verified to work cleanly.
+
+Once it's up (watch for `Host lock lease acquired` in the console), open:
+
+**`http://localhost:7071/api/swagger/ui`**
+
+Every endpoint is listed, grouped by tag, each with an auto-generated sample request body you can
+edit and a "Try it out" button that calls your real local API and shows the real response. The
+raw OpenAPI 3.0 spec is also available at `http://localhost:7071/api/openapi/v3.json` if you want
+to import it into another tool (Postman, Insomnia, etc.).
+
+### 15.4 Testing authenticated endpoints without a real login
+
+The template's `LocalDevelopment:AutoAuthenticateAsEmail` setting auto-authenticates every local
+request as the email you set there — no need to construct a real `x-ms-client-principal` header
+by hand (see §8 for what that header normally carries). This bypass is double-gated so it can
+never activate anywhere real: it only works when `ASPNETCORE_ENVIRONMENT`/the hosting environment
+is `Development` (true only for a local run, never a deployed one), **and** only when this exact
+config key is set, which only ever exists in the git-ignored `local.settings.json`, never
+committed, never deployed.
+
+This only gets you *authenticated* — it does not grant permissions by itself. The email you put
+there still needs to exist as an active row in `security.User` with a role assigned, in whichever
+database your connection string points at (`shriyaminingdbtest` for local dev), exactly like any
+other user — see §8 for the bootstrap SQL script. Run it against `shriyaminingdbtest` with your
+own email (or the template's placeholder `localdev@shriyaminingindustries.test`) to get real
+permissions when testing locally.
+
+To test the real authentication path instead (as the deployed app actually behaves), delete the
+`LocalDevelopment:AutoAuthenticateAsEmail` key, or set it to `""` — then only a request carrying a
+real `x-ms-client-principal` header is treated as authenticated, same as production.

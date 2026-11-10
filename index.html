@@ -185,6 +185,7 @@
   <a href="#auth">Auth</a>
   <a href="#cost">Cost</a>
   <a href="#debugging">Debugging</a>
+  <a href="#local-dev">Local dev</a>
 </nav>
 
 <main>
@@ -355,6 +356,41 @@ flowchart LR
 
   <p class="dim">Full playbook, including the SQL Database Project tooling notes and the VS 2026
   compatibility note, in <a href="https://github.com/shriyaminingindustriesgroup/ShriyaMiningIndustries_Docs/blob/main/ARCHITECTURE.md#12-debugging-playbook--things-that-have-actually-gone-wrong">ARCHITECTURE.md §12</a>.</p>
+</section>
+
+<section id="local-dev">
+  <h2>Local development</h2>
+  <p>Cloned <code>ShriyaMiningIndustries_api</code> and want to run it with the interactive
+  Swagger UI? The project already ships a fully-described OpenAPI contract — no separate tool to
+  build.</p>
+  <div class="card">
+    <ol>
+      <li>Prerequisites: .NET 10 SDK, Azure Functions Core Tools v4
+        (<code>npm install -g azure-functions-core-tools@4</code>), Azurite
+        (<code>npm install -g azurite</code>, run it in its own terminal). Ask a team member for
+        the <code>shriyaminingdbtest</code> connection string and a SQL firewall rule for your IP
+        — never request the production connection string for local dev.</li>
+      <li>
+        <pre>cd src/ShriyaMiningIndustries.Api
+cp local.settings.json.example local.settings.json</pre>
+        Fill in the real connection string you were given. This file is git-ignored — never
+        commit it.
+      </li>
+      <li>
+        <pre>dotnet run --configuration Release</pre>
+        Use <code>dotnet run</code>, not <code>func start</code> — the latter warns it may not
+        load extensions correctly for this project. Once it's up, open
+        <code>http://localhost:7071/api/swagger/ui</code>.
+      </li>
+    </ol>
+  </div>
+  <p>To test permission-gated endpoints without a real login, the template's
+  <code>LocalDevelopment:AutoAuthenticateAsEmail</code> setting auto-authenticates every local
+  request as the email you set there — double-gated so it can never activate anywhere real (only
+  works in a local Development run, and only when this git-ignored key is present). The email
+  still needs a real role in <code>security.User</code> in <code>shriyaminingdbtest</code> to get
+  actual permissions (same bootstrap script as §8).</p>
+  <p class="dim">Full detail in <a href="https://github.com/shriyaminingindustriesgroup/ShriyaMiningIndustries_Docs/blob/main/ARCHITECTURE.md#15-local-development--running-the-api-from-a-fresh-clone">ARCHITECTURE.md §15</a>.</p>
 </section>
 
 </main>
