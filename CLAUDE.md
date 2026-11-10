@@ -3,7 +3,8 @@
 This repo **is** the canonical architecture reference for the whole system — `ARCHITECTURE.md`
 (source of truth) and `index.html` (diagram-first published view, via GitHub Pages at
 https://shriyaminingindustriesgroup.github.io/ShriyaMiningIndustries_Docs/). The other two repos
-are `ShriyaMiningIndustries_api` (C# backend) and `ShriyaMiningIndustries_UI` (Vue frontend).
+are `ShriyaMiningIndustries_api` (C# backend, **private**) and `ShriyaMiningIndustries_UI` (Vue
+frontend, private). This repo stays public and deliberately contains no secrets, so it can.
 
 ## This repo's role
 
@@ -23,3 +24,8 @@ a change to one without the other is an incomplete update. Diagrams are Mermaid;
   the real repos/Azure resources before documenting them as true.
 - Update this documentation in the same session as the architectural change it describes, not
   "later."
+- When documenting something as "verified working," make sure it actually was — a real bug
+  (migration run order) went undocumented-as-a-risk for a long time because the live databases
+  were seeded rather than built from these scripts, so CI passing against them never actually
+  exercised it. "CI is green" and "this was verified from a clean/empty state" are different
+  claims; don't conflate them in what gets written here.
