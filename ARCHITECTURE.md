@@ -241,16 +241,20 @@ ever reached CI, but would be a nasty one to debug blind if it recurred.
   `database/migrations/V003__seed-initial-data.sql` for the exact permission grants per role.
 - **`app` schema** — Vendor, Buyer, Invoice + InvoiceLine, PO import records, company profile, and
   related master data.
-- **Partial fulfillment (`sales` + `app`)** — `sales.POLine` is the durable PO ledger: PO
-  uploads upsert lines by a stable natural key (PO# + SKU + SO Ref# + occurrence), so weekly
-  PendingOrders re-uploads update quantities in place while `POLineId` (the PK) and the
-  fulfillment history attached to it survive. `app.InvoiceLine.POLineId` links each invoiced
-  line back to the PO line it (partially) fulfills. A PO line's status (Open / Partial /
-  Fulfilled / Over-invoiced) is **computed on read** from the live invoice lines
-  (`sales.usp_PoFulfillment_GetList`), never stored — it can't drift. Saving an invoice is
-  hard-blocked (`INV-VALIDATE-400`, with the specific lines named) when a line would push a PO
-  line past its ordered quantity; quantities are compared directly regardless of UOM, per the
-  product decision. A matching 50400 backstop lives in `usp_Invoice_Create`/`usp_Invoice_Update`.
+- **Partial fulfillment (`sales` + `app`)** — `sales.POLine` is the durable PO ledger. Every
+  uploaded row must carry a unique, uploader-maintained **Line Id** column (rejected otherwise,
+  with the exact rows named); re-uploads match on it alone, so quantity updates — and even
+  PO#/SKU/SO Ref# corrections — update the same line in place while `POLineId` (the PK) and the
+  fulfillment history attached to it survive. Rows imported before the Line Id column existed
+  are adopted by a natural-key fallback (PO# + SKU + SO Ref# + occurrence) and stamped on their
+  next upload. Each upload reports per-line import actions (Added / Updated / Unchanged).
+  `app.InvoiceLine.POLineId` links each invoiced line back to the PO line it (partially)
+  fulfills. A PO line's status (Open / Partial / Fulfilled / Over-invoiced) is **computed on
+  read** from the live invoice lines (`sales.usp_PoFulfillment_GetList`), never stored — it
+  can't drift. Saving an invoice is hard-blocked (`INV-VALIDATE-400`, with the specific lines
+  named) when a line would push a PO line past its ordered quantity; quantities are compared
+  directly regardless of UOM, per the product decision. A matching 50400 backstop lives in
+  `usp_Invoice_Create`/`usp_Invoice_Update`.
 
 ### 7.3 Tooling note — SQL Database Project and Visual Studio 2026
 
