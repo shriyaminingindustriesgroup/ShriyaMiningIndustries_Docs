@@ -119,7 +119,7 @@ one Azure subscription.
 | Function App (test) | `ShriyaMiningIndustries-api-test` | Consumption (Y1), Windows, `dotnet-isolated` | Same role as above, for test. |
 | Storage account | `stshriyaminingapi` | Standard_LRS | Backs the prod Function App's internal state. |
 | Storage account | `stshriyaminingapitest` | Standard_LRS | Backs the test Function App's internal state. |
-| SQL Server | `shriyaminingindustries` (`shriyaminingindustries.database.windows.net`) | Logical server | Admin login: `Smiadmin` (password stored as GitHub secrets / app settings, never in this repo — see §11 for the plan to centralize it). No Azure AD admin configured yet (SQL auth only, today). |
+| SQL Server | `shriyaminingindustries` (`shriyaminingindustries.database.windows.net`) | Logical server | SQL-auth admin login configured (ask a team member for the username/password — neither is written down here; this repo is public). No Azure AD admin configured yet. |
 | SQL Database (prod) | `shriyaminingdb` | General Purpose, Serverless, 0.5 vCore min, free-limit enabled, auto-pause after 60 min idle | |
 | SQL Database (test) | `shriyaminingdbtest` | Same tier/config as prod | |
 | Application Insights | `ShriyaMiningIndustries-api` | Standard | Shared telemetry sink for all four API-side deployments (prod/test × co-located/standalone). One place to watch live traffic for any of them — see §12. |
