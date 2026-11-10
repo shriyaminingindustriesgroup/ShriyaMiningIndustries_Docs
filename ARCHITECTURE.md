@@ -124,6 +124,14 @@ one Azure subscription.
 | SQL Database (test) | `shriyaminingdbtest` | Same tier/config as prod | |
 | Application Insights | `ShriyaMiningIndustries-api` | Standard | Shared telemetry sink for all four API-side deployments (prod/test × co-located/standalone). One place to watch live traffic for any of them — see §12. |
 | Azure AD App Registration | `ShriyaMiningIndustriesApi-github-actions` (App ID `32f692ff-e4ba-4492-a4cc-24375ea72d2a`) | — | Used for GitHub Actions OIDC login (`azure/login@v2`), no stored client secret. Has **two** federated credentials, one per branch — see §6. |
+| Action Group | `ShriyaMiningAlerts` | Email | Notifies on the two alert rules below. |
+| Metric alert | `ShriyaMining-ExceptionSpike` | Severity 2 | Fires when `exceptions/count` on the shared Application Insights instance exceeds 5 in a 15-minute window — catches a real error spike in any of the four API deployments. |
+| Metric alert | `ShriyaMining-FailedRequests` | Severity 2 | Same trigger pattern, on `requests/failed`. Neither alert fires on the known SQL cold-start flake (§12) — that reports a 200 with `"status":"degraded"` in the body, not an exception or a failed request. |
+
+Both alert rules were added specifically to close a real gap: before they existed, Application
+Insights was collecting telemetry nobody would be notified about — an outage or error spike would
+only be noticed if someone happened to be looking. Within Azure Monitor's free allowance (10
+monitored metric time series/month, confirmed against current pricing guidance) — this adds two.
 
 ---
 
