@@ -645,3 +645,42 @@ point-in-time restore procedure written down here yet — those would be the nex
 investment if production incidents become frequent enough to justify them. Today, a careful manual
 revert through the normal pipeline is the real, working path — tested by actually being the way
 every fix in this project has shipped so far.
+
+---
+
+## 17. Onboarding a new developer (with AI assistance)
+
+Both `ShriyaMiningIndustries_api` and `ShriyaMiningIndustries_UI` carry two auto-loaded context
+files — `CLAUDE.md` (Claude Code) and `.github/copilot-instructions.md` (GitHub Copilot, confirmed
+against [GitHub's own docs](https://docs.github.com/en/copilot/how-tos/custom-instructions/adding-repository-custom-instructions-for-github-copilot)
+as the real mechanism) — both pointing back at this document. A new developer using either tool
+gets the full architecture context automatically, with nothing to paste in by hand.
+
+1. **Get repo access first — both repos are private.** Someone with admin access adds the new
+   developer as a collaborator (repo → Settings → Collaborators) on whichever repo(s) they'll
+   touch — often both, since most features span backend and frontend.
+2. **Clone the relevant repo(s).**
+3. **Set up local dev** — each repo's `README.md` has a self-contained quick start (§15; Docker-
+   based for the API, no one to ask for credentials). Run both side by side: API via `dotnet run`
+   (port 7071), UI via `npm run dev` (port 3000, already proxies to the API — §15.5).
+4. **Branch off `test`, not `main`:**
+   ```
+   git checkout test && git pull
+   git checkout -b feature/whatever-it-is
+   ```
+5. **Open the project in an AI tool:**
+   - **Claude Code:** `cd` into the repo, start a session. `CLAUDE.md` loads automatically.
+   - **GitHub Copilot (VS Code):** open the repo folder, open Copilot Chat.
+     `.github/copilot-instructions.md` applies automatically if the VS Code setting
+     `github.copilot.chat.codeGeneration.useInstructionFiles` is enabled (default-on in recent
+     versions) — confirm by expanding the references list on a Copilot Chat response.
+6. **Describe the feature in plain language.** The loaded instructions tell the AI this is a
+   live, deployed system to extend within existing patterns, not a greenfield project.
+7. **Ask for a plan before code** on anything non-trivial — neither instructions file forces this
+   automatically. Review the plan, correct anything off, then say go.
+8. **Test locally before pushing** — `dotnet test` / Swagger UI for the API, `npm run test` for
+   the UI (§15.3, §15.5).
+9. **Push the feature branch, open a PR into `test`.** CI runs there in isolation (§4) —
+   validate on the test URL before going further.
+10. **Merge `test` → `main`** once satisfied — the same validated commit reaches production, not
+    a rebuild (§4, §16).

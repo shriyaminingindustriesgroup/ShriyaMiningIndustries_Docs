@@ -187,6 +187,7 @@
   <a href="#debugging">Debugging</a>
   <a href="#local-dev">Local dev</a>
   <a href="#rollback">Rollback</a>
+  <a href="#onboarding">Onboarding</a>
 </nav>
 
 <main>
@@ -441,6 +442,28 @@ npm run dev</pre>
   </div>
   <p class="dim">Full runbook, including what to check when the deploy itself isn't the problem,
   in <a href="https://github.com/shriyaminingindustriesgroup/ShriyaMiningIndustries_Docs/blob/main/ARCHITECTURE.md#16-rollback-runbook--a-bad-deploy-just-reached-production">ARCHITECTURE.md §16</a>.</p>
+</section>
+
+<section id="onboarding">
+  <h2>Onboarding a new developer (with AI assistance)</h2>
+  <p>Both repos carry two auto-loaded context files — <code>CLAUDE.md</code> and
+  <code>.github/copilot-instructions.md</code> — both pointing back at this document. A new
+  developer using Claude Code or GitHub Copilot gets the full architecture context
+  automatically, nothing to paste in by hand.</p>
+  <div class="card">
+    <ol>
+      <li>Get added as a collaborator — both repos are private.</li>
+      <li>Clone, then follow the README's local-dev quick start (Docker-based, nothing to ask
+        anyone for).</li>
+      <li>Branch off <code>test</code>, not <code>main</code>.</li>
+      <li>Open the repo in Claude Code or VS Code + Copilot — context loads automatically.</li>
+      <li>Describe the feature in plain language; ask for a plan before code on anything
+        non-trivial.</li>
+      <li>Test locally, push the feature branch, PR into <code>test</code>, validate there, then
+        merge <code>test</code> → <code>main</code>.</li>
+    </ol>
+  </div>
+  <p class="dim">Full runbook in <a href="https://github.com/shriyaminingindustriesgroup/ShriyaMiningIndustries_Docs/blob/main/ARCHITECTURE.md#17-onboarding-a-new-developer-with-ai-assistance">ARCHITECTURE.md §17</a>.</p>
 </section>
 
 </main>
