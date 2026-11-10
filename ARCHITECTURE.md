@@ -26,7 +26,7 @@ All three live under the **`shriyaminingindustriesgroup`** GitHub account.
 
 | Repo | GitHub location | Purpose | Branch strategy |
 |---|---|---|---|
-| `ShriyaMiningIndustries_api` | `shriyaminingindustriesgroup/ShriyaMiningIndustries_api` | The backend: C# / .NET, Azure Functions isolated worker. Owns all business logic, data access, and the SQL Database Project (stored procedures). | `main` (prod), `test` (test env) |
+| `ShriyaMiningIndustries_api` | `shriyaminingindustriesgroup/ShriyaMiningIndustries_api` (**private**) | The backend: C# / .NET, Azure Functions isolated worker. Owns all business logic, data access, and the SQL Database Project (stored procedures). | `main` (prod), `test` (test env) |
 | `ShriyaMiningIndustries_UI` | `shriyaminingindustriesgroup/ShriyaMiningIndustries_UI` | The frontend: Vue 3 + Vite + TypeScript. Deployed as an Azure Static Web App with the C# API's build bundled in as its co-located Functions backend (see §4). | `main` (prod), `test` (test env) |
 | `ShriyaMiningIndustries_Docs` | `shriyaminingindustriesgroup/ShriyaMiningIndustries_Docs` | This repo. Living architecture documentation, public so it can be published free via GitHub Pages. **Never put secrets, connection strings, or passwords in here** — reference *where* a value lives (a named GitHub secret, a named app setting), never the value itself. | `main` |
 
@@ -199,6 +199,13 @@ Key points worth knowing when debugging this pipeline:
 - **The cross-repo trigger needs a PAT, not the default `GITHUB_TOKEN`.** `UI_REPO_DISPATCH_TOKEN`
   is a fine-grained PAT (Contents: Read and write, scoped only to this repo), stored as a secret
   on the *API* repo, since the default token can't dispatch into another repository.
+- **Downloading the API release also needs a PAT**, for the same underlying reason in the
+  opposite direction: `API_REPO_READ_TOKEN` (fine-grained, Contents: Read-only, scoped only to
+  `ShriyaMiningIndustries_api`), stored as a secret on *this* repo. This is only needed because
+  the API repo is private (§2) — the default `GITHUB_TOKEN` only sees the repo its own workflow
+  runs in, so it couldn't see a private API repo's releases. (It worked without this token while
+  the API repo was briefly public, which masked the need for it — worth knowing if this ever
+  looks like it "used to just work.")
 - **The SWA deployment token** (`AZURE_STATIC_WEB_APPS_API_TOKEN` secret, this repo) is the one
   credential that, if rotated or regenerated in Azure, needs to be re-copied here by hand — it's
   not something either pipeline can self-heal.
@@ -396,6 +403,30 @@ If you see a call to `GET /invoices/{id}/export?format=print` anywhere, that's a
 bug that was already fixed once (see commit history on both repos, "print HTML client-side"); the
 fix is to call the client-side builder instead of adding the format back to the API.
 
+**A migration against a genuinely empty database fails with "the specified schema name ... does
+not exist".** Fixed once already (`R__error-handling.sql` was running before `V001__schemas.sql`
+because DbUp's effective default order is plain alphabetical filename order, and "R" sorts before
+"V" — see `ScriptRunGroupOrder` in `src/ShriyaMiningIndustries.Migrations/Program.cs`). If this
+recurs after adding a new repeatable (`R__`) or versioned (`V###__`) script, check that the new
+script doesn't depend on something from a script with a *higher* `RunGroupOrder` — right now that
+just means "every `R__` script can assume every `V###__` script has already run," nothing more
+granular. This class of bug is easy to reintroduce silently and hard to notice, because the real
+Azure databases were seeded via `seed-baseline` (see that command's own remarks in `Program.cs`)
+rather than ever being built from empty — so a from-scratch run is the only thing that actually
+exercises migration order. The local Docker setup (§15.2 Option A) is exactly that kind of
+from-scratch run; running it after any migration-file change is the real regression check here,
+not just "did DbUp return success against Azure" (which tells you nothing about order, since nothing
+new was actually applied there).
+
+**A newly-private repo breaks a cross-repo workflow step with `GraphQL: Could not resolve to a
+Repository`.** The default `GITHUB_TOKEN` a workflow gets is scoped only to the repo it runs in —
+it can read a *public* repo it doesn't belong to, but not a private one. If a repo's visibility
+changes from public to private (as `ShriyaMiningIndustries_api` did — see §2), every other repo's
+workflow that reads from it (not just the ones that write to it) needs its own fine-grained PAT
+added as a secret, matching the pattern already used for `UI_REPO_DISPATCH_TOKEN` /
+`API_REPO_READ_TOKEN` (§6.2). Easy to miss because the step worked fine right up until the
+visibility change, with no code change of its own to point at.
+
 ---
 
 ## 13. Common tasks
@@ -444,21 +475,49 @@ theoretical — every step here was actually run successfully before being writt
 | .NET SDK | 10.0.x | https://dotnet.microsoft.com/download — no `global.json` pins a specific SDK, any .NET 10 SDK works |
 | Azure Functions Core Tools | v4 | `npm install -g azure-functions-core-tools@4` |
 | Azurite (local storage emulator) | any recent | `npm install -g azurite`, then run `azurite` in its own terminal (or use the Azurite extension in VS Code) |
-| A SQL connection string | — | ask an existing team member for the `shriyaminingdbtest` connection string, and ask them to add your current public IP as a SQL Server firewall rule (same server as production, different database — see §5). **Never** request or use the production (`shriyaminingdb`) connection string for local development. |
+| Docker Desktop | any recent | **Recommended** — gives you a fully isolated local database with no external dependency at all. See §15.2 Option A. |
 
-### 15.2 One-time setup
+### 15.2 One-time setup — database
+
+Two options. **Option A is recommended for most work:** fully isolated, nothing to ask anyone
+for, nothing shared with other developers. Use Option B only if you specifically need to test
+against data shaped like the shared test environment, or don't want to run Docker.
+
+**Option A — local Docker SQL Server (recommended):**
 
 1. `git clone https://github.com/shriyaminingindustriesgroup/ShriyaMiningIndustries_api.git`
-2. Copy the template and fill in the real connection string someone gave you:
+2. ```
+   cd local-dev
+   docker compose up -d
+   ```
+   First run pulls the SQL Server image (a few hundred MB — may take a few minutes). Wait for
+   `docker ps` to show the container as `healthy`.
+3. Create the database and apply the full schema, from a fresh clone, exactly as CI does:
+   ```
+   cd ..
+   dotnet run --project src/ShriyaMiningIndustries.Migrations --configuration Release -- apply "Server=tcp:localhost,1433;Initial Catalog=ShriyaMiningIndustriesLocal;User ID=sa;Password=LocalDevOnly!2026;TrustServerCertificate=True;Encrypt=False;" database/migrations
+   ```
+   (The database itself needs creating first if this is truly the first run —
+   `CREATE DATABASE ShriyaMiningIndustriesLocal` via any SQL client connected to
+   `localhost,1433` / `sa` / the password above — the container doesn't create it for you.)
+4. Copy the template — it's already pre-filled for exactly this setup, nothing to edit:
    ```
    cd src/ShriyaMiningIndustries.Api
    cp local.settings.json.example local.settings.json
    ```
-   `local.settings.json` is git-ignored — it will never be committed, and the repo only ever
-   ships the `.example` template (no real values in it). **Never commit a filled-in
-   `local.settings.json`.**
-3. Make sure Azurite is running (`azurite` in a separate terminal, defaults are fine —
-   `AzureWebJobsStorage` in the template already points at it via `UseDevelopmentStorage=true`).
+
+**Option B — the shared test database:** ask an existing team member for the
+`shriyaminingdbtest` connection string, and ask them to add your current public IP as a SQL
+Server firewall rule (same server as production, different database — see §5). **Never** request
+or use the production (`shriyaminingdb`) connection string for local development. Then copy the
+template (`cp local.settings.json.example local.settings.json`) and replace the connection string
+with the one you were given.
+
+Either way: `local.settings.json` is git-ignored — it will never be committed, and the repo only
+ever ships the `.example` template. **Never commit a filled-in `local.settings.json`.**
+
+Make sure Azurite is running (`azurite` in a separate terminal, defaults are fine —
+`AzureWebJobsStorage` in the template already points at it via `UseDevelopmentStorage=true`).
 
 ### 15.3 Run it
 

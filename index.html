@@ -355,6 +355,20 @@ flowchart LR
     it's built entirely client-side from data already fetched. A call to
     <code>?format=print</code> reaching the API at all is a regression.
   </div>
+  <div class="gotcha">
+    <strong>A fresh migration run fails with "schema does not exist."</strong> Fixed once already
+    — a repeatable (<code>R__</code>) script was running before the versioned
+    (<code>V###__</code>) script that creates what it depends on, because DbUp's default order is
+    plain alphabetical and "R" sorts before "V". The real Azure databases never hit this because
+    they were seeded without actually running the scripts — only a true from-scratch run (the
+    local Docker setup below) exercises migration order at all.
+  </div>
+  <div class="gotcha">
+    <strong>A cross-repo workflow step breaks with "Could not resolve to a Repository."</strong>
+    The default <code>GITHUB_TOKEN</code> can read a <em>public</em> repo it doesn't belong to,
+    but not a private one. Making <code>ShriyaMiningIndustries_api</code> private broke the UI
+    repo's ability to download its releases until a dedicated read-only PAT was added.
+  </div>
 
   <p class="dim">Full playbook, including the SQL Database Project tooling notes and the VS 2026
   compatibility note, in <a href="https://github.com/shriyaminingindustriesgroup/ShriyaMiningIndustries_Docs/blob/main/ARCHITECTURE.md#12-debugging-playbook--things-that-have-actually-gone-wrong">ARCHITECTURE.md §12</a>.</p>
@@ -369,14 +383,20 @@ flowchart LR
     <ol>
       <li>Prerequisites: .NET 10 SDK, Azure Functions Core Tools v4
         (<code>npm install -g azure-functions-core-tools@4</code>), Azurite
-        (<code>npm install -g azurite</code>, run it in its own terminal). Ask a team member for
-        the <code>shriyaminingdbtest</code> connection string and a SQL firewall rule for your IP
-        — never request the production connection string for local dev.</li>
+        (<code>npm install -g azurite</code>, run it in its own terminal), and Docker Desktop
+        (recommended — gives you a fully isolated local database, nothing to ask anyone for).</li>
+      <li>
+        <pre>cd local-dev
+docker compose up -d</pre>
+        Spins up a local SQL Server container. The template below is already pre-filled to match
+        it — no connection string to request from anyone. (Alternative: skip Docker and ask a
+        team member for the shared <code>shriyaminingdbtest</code> connection string instead —
+        never the production one — see ARCHITECTURE.md §15.2 Option B.)
+      </li>
       <li>
         <pre>cd src/ShriyaMiningIndustries.Api
 cp local.settings.json.example local.settings.json</pre>
-        Fill in the real connection string you were given. This file is git-ignored — never
-        commit it.
+        This file is git-ignored — never commit it.
       </li>
       <li>
         <pre>dotnet run --configuration Release</pre>
