@@ -405,6 +405,16 @@ If you see a call to `GET /invoices/{id}/export?format=print` anywhere, that's a
 bug that was already fixed once (see commit history on both repos, "print HTML client-side"); the
 fix is to call the client-side builder instead of adding the format back to the API.
 
+**`GET /invoices/{id}/export?format=excel` returns 400 for a PO-editor (document) invoice.**
+Deliberate, same principle as print above: for invoices carrying a legacy `document`, the Excel
+workbook is built entirely **client-side** (`buildLegacyWorkbook` in
+`src/services/legacy-invoice.js` → `downloadWorkbook` in `src/services/invoice-download.ts`) — the
+exact same code that renders the on-screen Excel preview, so the downloaded file can never drift
+from the preview. The API's export endpoint only serves simple items-based invoices. Don't "fix"
+a document invoice's failing export call by porting the legacy workbook layout into C# — route the
+call site to the client-side builder instead (see `downloadExcel` in `InvoiceView.vue` /
+`InvoiceList.vue` and `saveDownload` in `POImport.vue` for the pattern).
+
 **A migration against a genuinely empty database fails with "the specified schema name ... does
 not exist".** Fixed once already (`R__error-handling.sql` was running before `V001__schemas.sql`
 because DbUp's effective default order is plain alphabetical filename order, and "R" sorts before

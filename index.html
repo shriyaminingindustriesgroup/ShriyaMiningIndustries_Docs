@@ -357,6 +357,13 @@ flowchart LR
     <code>?format=print</code> reaching the API at all is a regression.
   </div>
   <div class="gotcha">
+    <strong>Excel export 400s for a PO-editor (document) invoice.</strong> Same principle as
+    print: document invoices' Excel workbook is built entirely client-side by the same code that
+    renders the on-screen preview, so the file can never drift from the preview. The API's export
+    endpoint only serves simple items-based invoices — route the call site to the client-side
+    builder, don't port the layout into C#.
+  </div>
+  <div class="gotcha">
     <strong>A fresh migration run fails with "schema does not exist."</strong> Fixed once already
     — a repeatable (<code>R__</code>) script was running before the versioned
     (<code>V###__</code>) script that creates what it depends on, because DbUp's default order is
