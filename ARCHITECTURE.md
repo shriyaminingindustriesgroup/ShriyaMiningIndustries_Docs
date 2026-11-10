@@ -492,3 +492,67 @@ permissions when testing locally.
 To test the real authentication path instead (as the deployed app actually behaves), delete the
 `LocalDevelopment:AutoAuthenticateAsEmail` key, or set it to `""` — then only a request carrying a
 real `x-ms-client-principal` header is treated as authenticated, same as production.
+
+---
+
+## 16. Rollback runbook — a bad deploy just reached production
+
+The promotion workflow (§4) protects you from deploying something untested, but it doesn't protect
+you from something that passed on `test` and still breaks in `main` (different data, different
+timing, a flake that didn't reproduce). When that happens:
+
+### 16.1 Decide: forward-fix or revert
+
+- **If the fix is small and obvious**, it's usually faster to fix forward: commit the fix to
+  `test`, validate it there, merge to `main`. The pipeline (§6) handles the rest automatically.
+- **If you don't yet know the cause, or the fix isn't small**, revert first, investigate after.
+  Production being broken is more expensive than losing a few minutes to a clean revert.
+
+### 16.2 How to revert — API or UI code
+
+```
+git checkout main
+git revert <bad-commit-sha>   # or the merge commit, if it was a squash-merged PR
+git push
+```
+
+A normal push to `main`, which goes through the exact same pipeline as any other change (§6) —
+no special "rollback mode" exists or is needed. The previous, known-good build gets redeployed
+through the standard path. This is why keeping `main` deployable at every commit matters: a
+revert is only safe and fast if the commit before the bad one was itself good.
+
+### 16.3 How to revert — a database migration
+
+This is the case that needs more care, because DbUp migrations (§7.1) are forward-only by design
+— there's no `migrate down`. Two different situations:
+
+- **A new migration itself is broken** (bad SQL, wrong assumption) and hasn't been widely used
+  yet: write a new migration that undoes the specific change (drop the column you added, etc.)
+  and push it through the normal pipeline. Don't edit or delete the broken migration file — DbUp
+  tracks which migrations have already run by filename, and an already-applied database would
+  silently skip a modified file next time, leaving it in a different state than a fresh database.
+- **A migration is fine, but the feature built on top of it is broken**: this is just a normal
+  code revert (§16.2) — the schema change can stay, only the application code needs to roll back.
+
+The SQL Database Project (stored procedures, §7.1) is safer to revert — it's a diff-and-replace
+publish, not a one-way migration, so reverting the C# source and redeploying naturally republishes
+the previous version of any changed stored procedure.
+
+### 16.4 If the deploy itself is the problem (not the code)
+
+If `main`'s pipeline deploys successfully but the live app is still broken (bad app setting, a
+resource outage, something environmental rather than code), check, in order:
+
+1. `/api/health` on the production URL (§4) — confirms whether the database connection itself is
+   the problem (see the SQL cold-start gotcha, §12, before assuming it's something else).
+2. Application Insights → Live Metrics (§5) — are requests arriving and what's actually failing.
+3. The app settings on the live resource (`ShriyaMiningIndustries-ui`'s production environment,
+   or `ShriyaMiningIndustries-api`) — did something get changed outside of a normal deploy.
+
+### 16.5 What this runbook deliberately doesn't cover
+
+There's no automated rollback, no deployment slots with instant swap, and no database
+point-in-time restore procedure written down here yet — those would be the next layer of
+investment if production incidents become frequent enough to justify them. Today, a careful manual
+revert through the normal pipeline is the real, working path — tested by actually being the way
+every fix in this project has shipped so far.

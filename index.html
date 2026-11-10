@@ -186,6 +186,7 @@
   <a href="#cost">Cost</a>
   <a href="#debugging">Debugging</a>
   <a href="#local-dev">Local dev</a>
+  <a href="#rollback">Rollback</a>
 </nav>
 
 <main>
@@ -391,6 +392,24 @@ cp local.settings.json.example local.settings.json</pre>
   still needs a real role in <code>security.User</code> in <code>shriyaminingdbtest</code> to get
   actual permissions (same bootstrap script as §8).</p>
   <p class="dim">Full detail in <a href="https://github.com/shriyaminingindustriesgroup/ShriyaMiningIndustries_Docs/blob/main/ARCHITECTURE.md#15-local-development--running-the-api-from-a-fresh-clone">ARCHITECTURE.md §15</a>.</p>
+</section>
+
+<section id="rollback">
+  <h2>Rollback runbook</h2>
+  <p>A bad deploy that passed <code>test</code> and still breaks in production: decide
+  forward-fix vs. revert first — if the cause isn't obvious yet, revert, investigate after.</p>
+  <div class="card">
+    <p><strong>Code (API or UI):</strong> <code>git revert &lt;bad-sha&gt;</code> on
+    <code>main</code>, push. Goes through the exact same pipeline as any other change — no
+    separate "rollback mode."</p>
+    <p><strong>A broken migration:</strong> DbUp is forward-only — never edit or delete an
+    already-applied migration file. Write a new migration that undoes the specific change
+    instead.</p>
+    <p><strong>Stored procedures:</strong> safer — a diff-and-replace publish, not one-way, so
+    reverting the C# source naturally republishes the previous version on the next deploy.</p>
+  </div>
+  <p class="dim">Full runbook, including what to check when the deploy itself isn't the problem,
+  in <a href="https://github.com/shriyaminingindustriesgroup/ShriyaMiningIndustries_Docs/blob/main/ARCHITECTURE.md#16-rollback-runbook--a-bad-deploy-just-reached-production">ARCHITECTURE.md §16</a>.</p>
 </section>
 
 </main>
