@@ -1,0 +1,382 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Shriya Mining Industries — Architecture</title>
+<style>
+  :root {
+    --bg: #fbf9f6;
+    --panel: #ffffff;
+    --border: #e4ddd2;
+    --text: #2b2520;
+    --text-dim: #6b6052;
+    --accent: #8a5a2b;
+    --accent-dim: #c9a877;
+    --code-bg: #f3ede2;
+    --table-head: #efe6d6;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1b1815;
+      --panel: #242019;
+      --border: #3a332a;
+      --text: #ece6da;
+      --text-dim: #ab9f8c;
+      --accent: #d6a15c;
+      --accent-dim: #8a6a3f;
+      --code-bg: #2c2620;
+      --table-head: #332c21;
+      color-scheme: dark;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.6;
+    padding-bottom: 4rem;
+  }
+  header {
+    padding: 3rem 1.5rem 2rem;
+    text-align: center;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg, var(--table-head), transparent);
+  }
+  header h1 {
+    margin: 0 0 0.5rem;
+    font-size: clamp(1.6rem, 4vw, 2.4rem);
+    color: var(--accent);
+  }
+  header p {
+    margin: 0;
+    color: var(--text-dim);
+    font-size: 0.95rem;
+  }
+  nav.toc {
+    max-width: 900px;
+    margin: 1.5rem auto 0;
+    padding: 1rem 1.25rem;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.25rem;
+    justify-content: center;
+    font-size: 0.85rem;
+  }
+  nav.toc a { color: var(--accent); text-decoration: none; }
+  nav.toc a:hover { text-decoration: underline; }
+  main {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 0 1.25rem;
+  }
+  section {
+    margin-top: 2.5rem;
+    padding-top: 0.5rem;
+  }
+  h2 {
+    color: var(--accent);
+    border-bottom: 2px solid var(--border);
+    padding-bottom: 0.4rem;
+    font-size: 1.3rem;
+  }
+  h3 { color: var(--text); font-size: 1.05rem; margin-top: 1.5rem; }
+  p { color: var(--text); }
+  .dim { color: var(--text-dim); font-size: 0.9rem; }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem 1.25rem;
+    margin: 1rem 0;
+  }
+  .env-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin: 1rem 0;
+  }
+  @media (max-width: 560px) { .env-grid { grid-template-columns: 1fr; } }
+  .env-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem;
+  }
+  .env-card.prod { border-left: 4px solid var(--accent); }
+  .env-card.test { border-left: 4px solid var(--accent-dim); }
+  .env-card h4 { margin: 0 0 0.5rem; }
+  .env-card a { color: var(--accent); word-break: break-all; font-size: 0.85rem; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0;
+    font-size: 0.88rem;
+  }
+  th, td {
+    border: 1px solid var(--border);
+    padding: 0.5rem 0.65rem;
+    text-align: left;
+    vertical-align: top;
+  }
+  th { background: var(--table-head); color: var(--text); }
+  code {
+    background: var(--code-bg);
+    padding: 0.1rem 0.35rem;
+    border-radius: 4px;
+    font-size: 0.85em;
+  }
+  pre {
+    background: var(--code-bg);
+    padding: 1rem;
+    border-radius: 8px;
+    overflow-x: auto;
+    font-size: 0.82rem;
+    border: 1px solid var(--border);
+  }
+  .mermaid {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem;
+    overflow-x: auto;
+  }
+  .gotcha {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--accent);
+    border-radius: 8px;
+    padding: 0.85rem 1rem;
+    margin: 0.75rem 0;
+  }
+  .gotcha strong { color: var(--accent); }
+  footer {
+    max-width: 900px;
+    margin: 3rem auto 0;
+    padding: 1.5rem 1.25rem 0;
+    border-top: 1px solid var(--border);
+    color: var(--text-dim);
+    font-size: 0.85rem;
+    text-align: center;
+  }
+  footer a { color: var(--accent); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Shriya Mining Industries — Invoice Platform</h1>
+  <p>Living architecture reference. Full detail in <a href="https://github.com/shriyaminingindustriesgroup/ShriyaMiningIndustries_Docs/blob/main/ARCHITECTURE.md">ARCHITECTURE.md</a> — this page is the diagram-first view of the same source.</p>
+</header>
+
+<nav class="toc">
+  <a href="#overview">Overview</a>
+  <a href="#architecture">Architecture</a>
+  <a href="#environments">Environments</a>
+  <a href="#pipelines">Pipelines</a>
+  <a href="#resources">Azure resources</a>
+  <a href="#database">Database</a>
+  <a href="#auth">Auth</a>
+  <a href="#cost">Cost</a>
+  <a href="#debugging">Debugging</a>
+</nav>
+
+<main>
+
+<section id="overview">
+  <h2>Overview</h2>
+  <p>A web application for managing export invoices: create/edit invoices, import purchase orders
+  from Excel, generate Excel/PDF/print exports, manage company profile data, and administer
+  users/roles. Backend is C# (.NET, Azure Functions isolated worker); frontend is Vue 3, deployed
+  as an independent repository. Three repos, all under the <code>shriyaminingindustriesgroup</code>
+  GitHub account:</p>
+  <table>
+    <tr><th>Repo</th><th>Purpose</th><th>Branches</th></tr>
+    <tr><td><code>ShriyaMiningIndustries_api</code></td><td>C# backend — business logic, data access, SQL Database Project</td><td><code>main</code> (prod), <code>test</code></td></tr>
+    <tr><td><code>ShriyaMiningIndustries_UI</code></td><td>Vue 3 frontend, deployed as an Azure Static Web App</td><td><code>main</code> (prod), <code>test</code></td></tr>
+    <tr><td><code>ShriyaMiningIndustries_Docs</code></td><td>This site + its Markdown source</td><td><code>main</code></td></tr>
+  </table>
+</section>
+
+<section id="architecture">
+  <h2>Architecture</h2>
+  <p>The Static Web App's <strong>co-located</strong> Functions — not the standalone Function
+  Apps — serve 100% of real traffic. Each SWA environment gets its own private copy of the API's
+  compiled build. The standalone Function Apps are kept deployed and healthy on purpose, as a
+  decouple-ready fallback (see <a href="https://github.com/shriyaminingindustriesgroup/ShriyaMiningIndustries_Docs/blob/main/ARCHITECTURE.md#9-decoupling-the-api-later-ifwhen-needed">ARCHITECTURE.md §9</a>).</p>
+  <div class="mermaid">
+flowchart TB
+    Browser["Browser"]
+    subgraph SWA["Azure Static Web App — ShriyaMiningIndustries-ui (Free tier)"]
+        direction TB
+        SWAProd["Production environment<br/>Vue build (main) + co-located Functions"]
+        SWATest["Test environment<br/>Vue build (test) + co-located Functions"]
+    end
+    subgraph Standalone["Standalone Function Apps — fallback, not live traffic"]
+        FAProd["ShriyaMiningIndustries-api (prod)"]
+        FATest["ShriyaMiningIndustries-api-test"]
+    end
+    subgraph SQL["Azure SQL Server"]
+        DBProd[("shriyaminingdb")]
+        DBTest[("shriyaminingdbtest")]
+    end
+    AppInsights["Application Insights<br/>(shared, all 4 deployments)"]
+    Browser -->|HTTPS| SWAProd
+    Browser -->|HTTPS, testers| SWATest
+    SWAProd --> DBProd
+    SWATest --> DBTest
+    FAProd -.idle.-> DBProd
+    FATest -.idle.-> DBTest
+    SWAProd -.-> AppInsights
+    SWATest -.-> AppInsights
+    FAProd -.-> AppInsights
+    FATest -.-> AppInsights
+  </div>
+</section>
+
+<section id="environments">
+  <h2>Environments</h2>
+  <div class="env-grid">
+    <div class="env-card prod">
+      <h4>Production</h4>
+      <p class="dim">Branch: <code>main</code></p>
+      <p><a href="https://gray-meadow-0ebc61d10.6.azurestaticapps.net" target="_blank" rel="noopener">gray-meadow-0ebc61d10.6.azurestaticapps.net</a></p>
+      <p class="dim">DB: <code>shriyaminingdb</code> · Function App: <code>ShriyaMiningIndustries-api</code> · Release tag: <code>api-&lt;sha&gt;</code></p>
+    </div>
+    <div class="env-card test">
+      <h4>Test</h4>
+      <p class="dim">Branch: <code>test</code></p>
+      <p><a href="https://gray-meadow-0ebc61d10-test.centralus.6.azurestaticapps.net" target="_blank" rel="noopener">gray-meadow-0ebc61d10-test.centralus.6.azurestaticapps.net</a></p>
+      <p class="dim">DB: <code>shriyaminingdbtest</code> · Function App: <code>ShriyaMiningIndustries-api-test</code> · Release tag: <code>api-test-&lt;sha&gt;</code></p>
+    </div>
+  </div>
+  <p>Promote by merging <code>test</code> → <code>main</code> once validated — the same commit
+  reaches production, not a rebuild.</p>
+</section>
+
+<section id="pipelines">
+  <h2>CI/CD pipelines</h2>
+  <h3>API repo</h3>
+  <div class="mermaid">
+flowchart LR
+    Push["push: main or test"] --> Test["test job<br/>restore, build, unit tests"]
+    Test --> Migrate["migrate job<br/>open SQL firewall<br/>integration test (always vs TEST db)<br/>DbUp migration (branch DB)<br/>stored-proc publish (branch DB)<br/>close firewall"]
+    Migrate --> Deploy["deploy job<br/>publish API<br/>GitHub Release (branch-prefixed tag)<br/>deploy to branch's Function App<br/>dispatch to UI repo"]
+  </div>
+  <h3>UI repo</h3>
+  <div class="mermaid">
+flowchart LR
+    PushMain["push: main"] --> Build
+    PushTest["push: test"] --> Build
+    DispatchProd["dispatch: api-release-published"] --> Build
+    DispatchTest["dispatch: api-test-release-published"] --> Build
+    Build["Build Vue frontend"] --> Download["Download API release matching<br/>THIS environment's tag pattern<br/>(never just 'latest')"]
+    Download --> DeployProd["Deploy — production environment"]
+    Download --> DeployTest["Deploy — test environment"]
+  </div>
+  <p class="dim">Full step-by-step detail, including the exact gotchas each pipeline has hit, is in
+  <a href="https://github.com/shriyaminingindustriesgroup/ShriyaMiningIndustries_Docs/blob/main/ARCHITECTURE.md#6-cicd-pipelines">ARCHITECTURE.md §6</a>.</p>
+</section>
+
+<section id="resources">
+  <h2>Azure resources</h2>
+  <p class="dim">Resource group <code>ShriyaMiningIndustries</code>, region Central US.</p>
+  <table>
+    <tr><th>Resource</th><th>Name</th><th>Tier</th></tr>
+    <tr><td>Static Web App</td><td><code>ShriyaMiningIndustries-ui</code></td><td>Free</td></tr>
+    <tr><td>Function App (prod)</td><td><code>ShriyaMiningIndustries-api</code></td><td>Consumption (Y1)</td></tr>
+    <tr><td>Function App (test)</td><td><code>ShriyaMiningIndustries-api-test</code></td><td>Consumption (Y1)</td></tr>
+    <tr><td>SQL Server</td><td><code>shriyaminingindustries</code></td><td>—</td></tr>
+    <tr><td>SQL DB (prod)</td><td><code>shriyaminingdb</code></td><td>General Purpose Serverless, free-limit enabled</td></tr>
+    <tr><td>SQL DB (test)</td><td><code>shriyaminingdbtest</code></td><td>General Purpose Serverless, free-limit enabled</td></tr>
+    <tr><td>Application Insights</td><td><code>ShriyaMiningIndustries-api</code></td><td>Shared by all 4 API deployments</td></tr>
+  </table>
+</section>
+
+<section id="database">
+  <h2>Database</h2>
+  <p><strong>Two mechanisms, deliberately separate:</strong> DbUp owns tables and data
+  (<code>database/migrations/*.sql</code>); a SQL Database Project owns stored procedures/views
+  (published via SqlPackage, excluding tables/data from the diff). Schema: a <code>security</code>
+  schema (User/Role/Permission, role-based) and an <code>app</code> schema (Vendor/Buyer/Invoice
+  and related master data).</p>
+</section>
+
+<section id="auth">
+  <h2>Authentication &amp; authorization</h2>
+  <p>Login goes through the Static Web App's built-in Entra ID auth — no custom app registration.
+  SWA injects an <code>x-ms-client-principal</code> header on every authenticated request; the
+  API's middleware decodes it and looks up roles/permissions <strong>by email</strong> against
+  <code>security.User</code>. Logging in via AAD always succeeds if your identity is valid — you
+  get zero permissions until your email exists as an active row with a role assigned. There is no
+  self-service bootstrap for the first admin user; it's created directly via SQL (see
+  <a href="https://github.com/shriyaminingindustriesgroup/ShriyaMiningIndustries_Docs/blob/main/ARCHITECTURE.md#8-authentication--authorization">ARCHITECTURE.md §8</a> for the exact script).</p>
+</section>
+
+<section id="cost">
+  <h2>Cost model</h2>
+  <p>Deliberately built to stay near <strong>$0/month</strong> at real usage (~5 users, max 1–2
+  hrs/day), verified against actual Azure pricing rather than assumed:</p>
+  <ul>
+    <li>SWA Free tier — co-located Functions chosen specifically so Standard tier (~$9/mo) isn't needed.</li>
+    <li>Functions Consumption plan — 1M executions + 400,000 GB-s free per month, <em>per subscription</em>, shared across both Function Apps.</li>
+    <li>Both SQL databases have the Azure SQL free offer applied — 100,000 vCore-seconds + 32GB free per database per month, for the life of the subscription.</li>
+  </ul>
+  <p class="dim">Full breakdown in <a href="https://github.com/shriyaminingindustriesgroup/ShriyaMiningIndustries_Docs/blob/main/ARCHITECTURE.md#10-cost-model">ARCHITECTURE.md §10</a>.</p>
+</section>
+
+<section id="debugging">
+  <h2>Debugging playbook</h2>
+
+  <div class="gotcha">
+    <strong>"degraded" health / Error 40613 against SQL.</strong> Serverless auto-pause after 60
+    min idle. First request wakes it up and reports degraded; just retry.
+  </div>
+  <div class="gotcha">
+    <strong>A route 404s with no app error envelope.</strong> Azure Functions reserves the literal
+    path segment <code>admin</code> for its own internal API. That's why the admin console uses
+    <code>console/*</code>, not <code>admin/*</code>.
+  </div>
+  <div class="gotcha">
+    <strong><code>AADSTS700213</code> on <code>azure/login@v2</code>.</strong> The federated
+    identity credential doesn't have an entry for this branch yet — each long-lived branch needs
+    its own, scoped by exact subject string.
+  </div>
+  <div class="gotcha">
+    <strong>UI deploy grabs the wrong environment's API build.</strong> Never trust "latest
+    release" when two environments publish to the same repo — match on tag pattern instead.
+  </div>
+  <div class="gotcha">
+    <strong>Print/PDF export fails.</strong> Print layout is deliberately not served by the API —
+    it's built entirely client-side from data already fetched. A call to
+    <code>?format=print</code> reaching the API at all is a regression.
+  </div>
+
+  <p class="dim">Full playbook, including the SQL Database Project tooling notes and the VS 2026
+  compatibility note, in <a href="https://github.com/shriyaminingindustriesgroup/ShriyaMiningIndustries_Docs/blob/main/ARCHITECTURE.md#12-debugging-playbook--things-that-have-actually-gone-wrong">ARCHITECTURE.md §12</a>.</p>
+</section>
+
+</main>
+
+<footer>
+  Source of truth: <a href="https://github.com/shriyaminingindustriesgroup/ShriyaMiningIndustries_Docs">ShriyaMiningIndustries_Docs</a>.
+  This page and its Markdown source are kept in sync — update both when the architecture changes.
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'default',
+    securityLevel: 'loose'
+  });
+</script>
+
+</body>
+</html>
