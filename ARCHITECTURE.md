@@ -7,7 +7,9 @@ start to finish should be enough to understand how the system fits together, mak
 safely, and debug a real incident. Keep it current: when you change something architectural,
 update this file in the same session, not "later."
 
-**Last substantially updated:** 2026-11-10, after building the Test/Prod environment split.
+**Last substantially updated:** 2026-11-10, after closing out the final-review punch list
+(UI test coverage, monitoring alerts, rollback runbook, API repo made private, Docker-based local
+dev) and fixing a real migration run-order bug found while verifying the last of those.
 
 ---
 
@@ -492,15 +494,17 @@ against data shaped like the shared test environment, or don't want to run Docke
    ```
    First run pulls the SQL Server image (a few hundred MB — may take a few minutes). Wait for
    `docker ps` to show the container as `healthy`.
-3. Create the database and apply the full schema, from a fresh clone, exactly as CI does:
+3. The container gives you a SQL Server instance, not a database — create one (any SQL client
+   connected to `localhost,1433`, login `sa`, password `LocalDevOnly!2026`):
+   ```sql
+   CREATE DATABASE ShriyaMiningIndustriesLocal
    ```
-   cd ..
+4. Apply the full schema, from a fresh clone, exactly as CI does — this is also the real
+   regression check for migration ordering (§12):
+   ```
    dotnet run --project src/ShriyaMiningIndustries.Migrations --configuration Release -- apply "Server=tcp:localhost,1433;Initial Catalog=ShriyaMiningIndustriesLocal;User ID=sa;Password=LocalDevOnly!2026;TrustServerCertificate=True;Encrypt=False;" database/migrations
    ```
-   (The database itself needs creating first if this is truly the first run —
-   `CREATE DATABASE ShriyaMiningIndustriesLocal` via any SQL client connected to
-   `localhost,1433` / `sa` / the password above — the container doesn't create it for you.)
-4. Copy the template — it's already pre-filled for exactly this setup, nothing to edit:
+5. Copy the template — it's already pre-filled for exactly this setup, nothing to edit:
    ```
    cd src/ShriyaMiningIndustries.Api
    cp local.settings.json.example local.settings.json
@@ -559,6 +563,24 @@ permissions when testing locally.
 To test the real authentication path instead (as the deployed app actually behaves), delete the
 `LocalDevelopment:AutoAuthenticateAsEmail` key, or set it to `""` — then only a request carrying a
 real `x-ms-client-principal` header is treated as authenticated, same as production.
+
+### 15.5 Running the UI locally, against your local API
+
+`ShriyaMiningIndustries_UI`'s `vite.config.ts` already proxies `/api/*` to `localhost:7071` for
+its dev server — no extra config needed to run the full stack locally:
+
+```
+git clone https://github.com/shriyaminingindustriesgroup/ShriyaMiningIndustries_UI.git
+cd ShriyaMiningIndustries_UI
+npm install
+npm run dev
+```
+
+Open `http://localhost:3000` with the API from §15.3 running alongside it (`dotnet run` in the
+API repo, port 7071) — requests the Vue app makes to `/api/*` transparently reach your local
+Functions host. Other scripts worth knowing: `npm run test` (Vitest — the financial/business
+logic suite, see the UI repo's `src/services/legacy-invoice.test.js`) and `npm run type-check`
+(`vue-tsc`). All three (`test`, `build`, `type-check`) run in CI on every push — see §6.2.
 
 ---
 

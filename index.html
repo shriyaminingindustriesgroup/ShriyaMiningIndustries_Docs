@@ -412,6 +412,16 @@ cp local.settings.json.example local.settings.json</pre>
   works in a local Development run, and only when this git-ignored key is present). The email
   still needs a real role in <code>security.User</code> in <code>shriyaminingdbtest</code> to get
   actual permissions (same bootstrap script as §8).</p>
+  <h3>Running the UI locally, against your local API</h3>
+  <p>The UI's Vite dev server already proxies <code>/api/*</code> to <code>localhost:7071</code> —
+  no extra config needed:</p>
+  <pre>git clone .../ShriyaMiningIndustries_UI.git
+cd ShriyaMiningIndustries_UI
+npm install
+npm run dev</pre>
+  <p>Open <code>localhost:3000</code> with the local API (above) running alongside it. <code>npm
+  run test</code> runs the Vitest suite, <code>npm run type-check</code> runs <code>vue-tsc</code>
+  — both run in CI on every push.</p>
   <p class="dim">Full detail in <a href="https://github.com/shriyaminingindustriesgroup/ShriyaMiningIndustries_Docs/blob/main/ARCHITECTURE.md#15-local-development--running-the-api-from-a-fresh-clone">ARCHITECTURE.md §15</a>.</p>
 </section>
 
