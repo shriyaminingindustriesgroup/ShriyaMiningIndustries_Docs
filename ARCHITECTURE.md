@@ -43,40 +43,31 @@ C:\Users\<user>\OneDrive\GIT\ShriyaMiningIndustries_Docs\                      (
 ## 3. High-level architecture
 
 ```mermaid
-flowchart TB
-    Browser["Browser"]
+flowchart LR
+    Browser(["Browser"])
 
-    subgraph SWA["Azure Static Web App — ShriyaMiningIndustries-ui (Free tier)"]
+    subgraph Prod["PRODUCTION — main branch"]
         direction TB
-        SWAProd["Production environment\ngray-meadow-0ebc61d10.6.azurestaticapps.net\nVue build (main branch)\n+ co-located Functions (api-<sha> release)"]
-        SWATest["Test environment\ngray-meadow-0ebc61d10-test.centralus.6.azurestaticapps.net\nVue build (test branch)\n+ co-located Functions (api-test-<sha> release)"]
+        SWAProd["Static Web App<br/>production environment<br/>Vue + co-located API"]
+        DBProd[("shriyaminingdb")]
+        SWAProd --> DBProd
     end
 
-    subgraph Standalone["Standalone Function Apps — decouple-ready fallback, not in the live traffic path today"]
-        FAProd["ShriyaMiningIndustries-api\n(prod)"]
-        FATest["ShriyaMiningIndustries-api-test\n(test)"]
+    subgraph Test["TEST — test branch"]
+        direction TB
+        SWATest["Static Web App<br/>test environment<br/>Vue + co-located API"]
+        DBTest[("shriyaminingdbtest")]
+        SWATest --> DBTest
     end
 
-    subgraph SQL["Azure SQL Server — shriyaminingindustries.database.windows.net"]
-        DBProd[("shriyaminingdb\n(prod)")]
-        DBTest[("shriyaminingdbtest\n(test)")]
-    end
-
-    AppInsights["Application Insights\nShriyaMiningIndustries-api\n(shared by all 4 API deployments)"]
-
-    Browser -->|HTTPS| SWAProd
-    Browser -->|HTTPS, testers only| SWATest
-    SWAProd -->|"/api/* same-origin,\nx-ms-client-principal injected by SWA"| SWAProd
-    SWATest -->|"/api/* same-origin"| SWATest
-    SWAProd --> DBProd
-    SWATest --> DBTest
-    FAProd -.->|built, deployed, idle — no live traffic| DBProd
-    FATest -.->|built, deployed, idle — no live traffic| DBTest
-    SWAProd -.telemetry.-> AppInsights
-    SWATest -.telemetry.-> AppInsights
-    FAProd -.telemetry.-> AppInsights
-    FATest -.telemetry.-> AppInsights
+    Browser --> SWAProd
+    Browser --> SWATest
 ```
+
+*Not pictured, to keep this diagram readable:* two standalone Function Apps
+(`ShriyaMiningIndustries-api`, `ShriyaMiningIndustries-api-test`) are deployed and healthy but
+carry no live traffic — see below. A single shared Application Insights instance
+(`ShriyaMiningIndustries-api`) collects telemetry from all four deployments.
 
 **The one non-obvious thing to understand first:** the Static Web App's *co-located* Functions —
 not the standalone Function Apps — serve 100% of real user traffic. SWA Free tier cannot "link" to
@@ -180,17 +171,8 @@ behavior, unchanged by any of this).
 
 ```mermaid
 flowchart LR
-    subgraph Triggers
-        PushMain["push to main"]
-        PushTest["push to test"]
-        DispatchProd["repository_dispatch:\napi-release-published"]
-        DispatchTest["repository_dispatch:\napi-test-release-published"]
-    end
-    PushMain --> Build
-    PushTest --> Build
-    DispatchProd --> Build
-    DispatchTest --> Build
-    Build["Build Vue frontend\n(npm run build)"] --> Download["Download the API release whose\ntag matches this environment's pattern\n(^api-[0-9a-f]+$ vs ^api-test-[0-9a-f]+$)\n— NOT just 'latest'"]
+    Trigger["Push to main/test, or a matching\nrepository_dispatch event\n(api-release-published /\napi-test-release-published)\nfrom the API repo"] --> Build["Build Vue frontend"]
+    Build --> Download["Download the API release whose tag\nmatches this environment's pattern\n(^api-[0-9a-f]+$ vs ^api-test-[0-9a-f]+$)\n— NOT just 'latest'"]
     Download --> DeployProd["Build And Deploy (production)\n— default SWA environment"]
     Download --> DeployTest["Build And Deploy (test)\n— deployment_environment: test"]
 ```

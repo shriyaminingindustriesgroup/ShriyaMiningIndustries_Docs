@@ -211,33 +211,31 @@
   compiled build. The standalone Function Apps are kept deployed and healthy on purpose, as a
   decouple-ready fallback (see <a href="https://github.com/shriyaminingindustriesgroup/ShriyaMiningIndustries_Docs/blob/main/ARCHITECTURE.md#9-decoupling-the-api-later-ifwhen-needed">ARCHITECTURE.md §9</a>).</p>
   <div class="mermaid">
-flowchart TB
-    Browser["Browser"]
-    subgraph SWA["Azure Static Web App — ShriyaMiningIndustries-ui (Free tier)"]
+flowchart LR
+    Browser(["Browser"])
+
+    subgraph Prod["PRODUCTION — main branch"]
         direction TB
-        SWAProd["Production environment<br/>Vue build (main) + co-located Functions"]
-        SWATest["Test environment<br/>Vue build (test) + co-located Functions"]
-    end
-    subgraph Standalone["Standalone Function Apps — fallback, not live traffic"]
-        FAProd["ShriyaMiningIndustries-api (prod)"]
-        FATest["ShriyaMiningIndustries-api-test"]
-    end
-    subgraph SQL["Azure SQL Server"]
+        SWAProd["Static Web App<br/>production environment<br/>Vue + co-located API"]
         DBProd[("shriyaminingdb")]
-        DBTest[("shriyaminingdbtest")]
+        SWAProd --> DBProd
     end
-    AppInsights["Application Insights<br/>(shared, all 4 deployments)"]
-    Browser -->|HTTPS| SWAProd
-    Browser -->|HTTPS, testers| SWATest
-    SWAProd --> DBProd
-    SWATest --> DBTest
-    FAProd -.idle.-> DBProd
-    FATest -.idle.-> DBTest
-    SWAProd -.-> AppInsights
-    SWATest -.-> AppInsights
-    FAProd -.-> AppInsights
-    FATest -.-> AppInsights
+
+    subgraph Test["TEST — test branch"]
+        direction TB
+        SWATest["Static Web App<br/>test environment<br/>Vue + co-located API"]
+        DBTest[("shriyaminingdbtest")]
+        SWATest --> DBTest
+    end
+
+    Browser --> SWAProd
+    Browser --> SWATest
   </div>
+  <p class="dim">Not pictured, to keep this readable: two standalone Function Apps
+  (<code>ShriyaMiningIndustries-api</code>, <code>ShriyaMiningIndustries-api-test</code>) are
+  deployed and healthy but carry no live traffic — a decouple-ready fallback, see
+  <a href="https://github.com/shriyaminingindustriesgroup/ShriyaMiningIndustries_Docs/blob/main/ARCHITECTURE.md#9-decoupling-the-api-later-ifwhen-needed">ARCHITECTURE.md §9</a>.
+  A single shared Application Insights instance collects telemetry from all four deployments.</p>
 </section>
 
 <section id="environments">
@@ -272,11 +270,8 @@ flowchart LR
   <h3>UI repo</h3>
   <div class="mermaid">
 flowchart LR
-    PushMain["push: main"] --> Build
-    PushTest["push: test"] --> Build
-    DispatchProd["dispatch: api-release-published"] --> Build
-    DispatchTest["dispatch: api-test-release-published"] --> Build
-    Build["Build Vue frontend"] --> Download["Download API release matching<br/>THIS environment's tag pattern<br/>(never just 'latest')"]
+    Trigger["Push to main/test,<br/>or matching dispatch event<br/>from the API repo"] --> Build["Build Vue frontend"]
+    Build --> Download["Download the API release matching<br/>THIS environment's tag pattern<br/>— never just 'latest'"]
     Download --> DeployProd["Deploy — production environment"]
     Download --> DeployTest["Deploy — test environment"]
   </div>
