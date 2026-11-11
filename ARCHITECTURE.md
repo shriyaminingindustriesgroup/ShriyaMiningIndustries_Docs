@@ -293,6 +293,28 @@ ever reached CI, but would be a nasty one to debug blind if it recurred.
   API routes: `GET /api/po-ledger/pos`, `GET /api/po-ledger/lines`,
   `GET /api/po-ledger/lines/{id}/history`, `GET /api/po-import/batches`,
   `GET /api/po-import/batches/{id}/rows`, `POST /api/po-import/restore` — all `file.upload`.
+- **Purchase order PDFs are the PO source (V010)** — the buyer's PO PDF is uploaded, read and
+  kept as a Pending `sales.PODocument` (original file in `Content VARBINARY(MAX)`, plus what was
+  extracted); the user reviews/edits it and confirms. Reading is text-layer only (PdfPig,
+  Apache-2.0; scanned PDFs are rejected) with one layout reader, `NsrPurchaseOrderLayout`, that
+  locates columns from the table headings and handles both NSR line variants (a "Desc:" packaging
+  line, or a main qty/price plus a second CRATE qty/price; the first qty is always the main one).
+  `sales.PurchaseOrder` holds one row per buyer + PO# with the printed header; the first confirmed
+  PDF is revision 1 and **every later PDF of the same PO# is an update** — lines are matched on SKU
+  (letters/digits only, + occurrence), changed lines keep their `POLineId`/Line Id/invoice history,
+  new lines get the next number, and missing lines get `RemovedInRevision` (never deleted; they can't
+  be invoiced again). **Line Ids are generated**: `{BuyerCode}-{PO#}-{NN}`. Checks before saving:
+  qty × price (and alt qty × alt price) = Extended per line, lines = Subtotal = Total (acknowledgeable),
+  whole quantities, buyer/supplier names, older file version (`_N_` in the file name). **Invoice
+  rates for PO lines are locked to the PO unit price** (service check naming the line + SQL backstop;
+  `InvoiceLine.POUnitPrice` records the price used); a draft priced from an older PO version must be
+  updated before it can be saved. `app.Buyer.PoInputMethod` (`Pdf` default for all buyers |
+  `Spreadsheet`) — the PendingOrders spreadsheet upload is rejected for `Pdf` buyers (no admin
+  screen yet). Spreadsheet-only POs were backfilled as revision 0 (`Source='Spreadsheet'`), so a PDF
+  of the same PO# becomes an update of those lines. Routes: `POST /api/purchase-orders/extract`,
+  `POST /api/purchase-orders/documents/{id}/confirm|discard`, `GET /api/purchase-orders/{id}`,
+  `GET /api/purchase-orders/documents/{id}/file` (also `file.download`), `GET /api/po-ledger/line-prices`.
+  Storage: the two sample PDFs are 27 KB and 174 KB — 10,000 such POs ≈ 0.3–1.9 GB.
 - **Invoice currency (V009)** — `app.Invoice.Currency CHAR(3)` default `USD`, returned as
   `currency`. PO invoices carry no tax (the printed export invoice has no tax column); totals
   show Tax 0.00.
