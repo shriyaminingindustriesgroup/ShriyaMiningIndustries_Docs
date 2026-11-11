@@ -237,7 +237,7 @@ ever reached CI, but would be a nasty one to debug blind if it recurred.
 ### 7.2 Schema overview
 
 - **`security` schema** — `User`, `Role`, `Permission`, `UserRole` (many-to-many), `RolePermission`
-  (many-to-many). Seeded roles: `Admin` (all permissions), `User`, `Approver`, `Viewer` — see
+  (many-to-many). Seeded roles: `Admin` (all permissions), `User`, `Approver`, `Viewer`, and `Manager` (V011; see §8) — see
   `database/migrations/V003__seed-initial-data.sql` for the exact permission grants per role.
 - **`app` schema** — Vendor, Buyer, Invoice + InvoiceLine, PO import records, company profile, and
   related master data.
@@ -371,6 +371,24 @@ build; don't do that.
    session has had so far — building JWT validation against a tenant/client ID that doesn't exist
    yet would be speculative, untestable code. The SWA header path above is what the real UI and
    all current testing actually uses.
+
+6. **Roles** (`V003` seeds the first four, `V011` adds Manager and `Invoice.Status`). Admins change
+   anyone's roles on **Admin → Users** (tick roles, *Save roles*; `PUT /api/console/users/{id}/roles`).
+   Safeguards: every user keeps at least one role, an Admin can't remove their own Admin role, and
+   the last Admin can't lose it.
+
+   | Role | Can do |
+   |---|---|
+   | Admin | Everything, including the Admin screens (users/roles), Error logs and Company profile. Can move an invoice from **any status to any status**. |
+   | Manager | Everything Admin can **except** the Admin screens, Error logs, Company profile and buyer management. Can move an invoice **one step forward** only: Draft → In Review → Approved → Shipped. |
+   | Approver | Read invoices, download files, view reports (`invoice.approve` is granted but can't change status today — reserved for a future buyer-side approver). |
+   | User / Viewer | Unchanged from `V003`. |
+
+   **Invoice status** changes only through the buttons on the invoice page
+   (`POST /api/invoices/{id}/status`, needs `invoice.status`); the editors no longer have a status
+   field, and the API refuses a status change sent with an edit. Every change is in the invoice's
+   version history. **Only Draft invoices can be edited** — to fix an approved or shipped invoice an
+   Admin moves it back to Draft first.
 
 ---
 
