@@ -254,7 +254,48 @@ ever reached CI, but would be a nasty one to debug blind if it recurred.
   can't drift. Saving an invoice is hard-blocked (`INV-VALIDATE-400`, with the specific lines
   named) when a line would push a PO line past its ordered quantity; quantities are compared
   directly regardless of UOM, per the product decision. A matching 50400 backstop lives in
-  `usp_Invoice_Create`/`usp_Invoice_Update`.
+  `usp_Invoice_Create`/`usp_Invoice_Update`, which also take `UPDLOCK, HOLDLOCK` on the
+  referenced `sales.POLine` rows **before** writing any invoice line, so two concurrent saves
+  against the same PO line are serialized and can't both pass the remaining-qty check.
+  "Fulfilled" means "invoiced": there is no separate shipment record (product decision).
+- **Lossless PO import (V009)** — `sales.POImportRow` keeps **every row of every worksheet of
+  every upload** whole: all cells as displayed (`CellsJson`, column order preserved), the typed
+  value where Excel stored a number/date that displays differently (`TypedJson`), the sheet and
+  row number, and the import result — `Added`/`Updated`/`Unchanged` (ledger lines), `Skipped`
+  (first sheet, no usable qty, with the reason), `Stored` (other sheets), `Restored`, or
+  `Legacy` (the key-fields-only row backfilled for lines imported before V009 — the other
+  columns were never saved and can't be recovered from the database). Re-uploads add rows
+  rather than overwrite, so a line's full history survives. Columns are read **by position**: a
+  blank heading becomes `Column X` instead of shifting later values (a real pre-V009 bug).
+  `PONumber`/`SKU`/`SOReference`/`ExternalLineId` are `NVARCHAR(200)` and `Supplier`
+  `NVARCHAR(1000)`; longer values are cut in the ledger only, never in the stored row. The
+  uploaded **file itself is not kept** (product decision). `POLine.FirstImportBatchId` is the
+  upload that first added a line (`POImportBatchId` is overwritten on every update);
+  `LatestImportRowId` points at its newest full row. A **Restore** upload
+  (`usp_POImport_Restore`) stores an old file's rows as history for the lines it matches (by
+  Line Id, or PO# + SKU + SO Ref# + occurrence for files from before the Line Id column) and
+  never changes a ledger value.
+- **Buyer ownership (V009)** — `POImportBatch.BuyerId` is the buyer selected for an upload;
+  `POLine.BuyerId` is set by the upload that first adds a line and never changes. The PO list,
+  PO lines, fulfillment view and upload history are buyer-filtered, and an invoice may only
+  include PO lines of its own buyer (service check naming the lines, plus a 50400 backstop).
+  **Line Id stays unique across all buyers** — an upload carrying a Line Id another buyer owns
+  is rejected with the rows named (`usp_POLine_GetOwners`). Only the legacy natural-key
+  adoption index `UX_POLine_NaturalKey` is per-buyer (`BuyerId, PONumber, SKU, SOReference,
+  Occurrence`), so two buyers can share PO numbers. Backfill: the buyer of invoices raised
+  against the line, else the most-invoiced buyer, else the only buyer.
+- **"Use existing PO"** (PO Import step 1) — POs are listed per buyer for an upload-date
+  period (`usp_POLine_GetPoSummaries`: a PO is in [from, to) when any upload in it included
+  the PO). A PO's lines (`usp_POLine_GetByPo`) are grouped by the upload that first added them;
+  later updates don't move a line. Lines from several POs of one buyer are collected in a
+  selection basket (kept in the tab's `sessionStorage`) and invoiced together. Line history:
+  `usp_POLine_GetHistory`; upload history: `usp_POImport_GetBatches` / `usp_POImport_GetRows`.
+  API routes: `GET /api/po-ledger/pos`, `GET /api/po-ledger/lines`,
+  `GET /api/po-ledger/lines/{id}/history`, `GET /api/po-import/batches`,
+  `GET /api/po-import/batches/{id}/rows`, `POST /api/po-import/restore` — all `file.upload`.
+- **Invoice currency (V009)** — `app.Invoice.Currency CHAR(3)` default `USD`, returned as
+  `currency`. PO invoices carry no tax (the printed export invoice has no tax column); totals
+  show Tax 0.00.
 
 ### 7.3 Tooling note — SQL Database Project and Visual Studio 2026
 
@@ -452,6 +493,15 @@ workflow that reads from it (not just the ones that write to it) needs its own f
 added as a secret, matching the pattern already used for `UI_REPO_DISPATCH_TOKEN` /
 `API_REPO_READ_TOKEN` (§6.2). Easy to miss because the step worked fine right up until the
 visibility change, with no code change of its own to point at.
+
+**`Msg 1934 … SET options have incorrect settings: 'QUOTED_IDENTIFIER'` on a PO upload.**
+`sales.POLine` and `sales.POImportRow` have filtered indexes, which need `QUOTED_IDENTIFIER ON`
+both when a procedure is *created* and when it runs. SqlClient, DbUp and SqlPackage all use ON,
+but `sqlcmd` defaults to OFF — so a procedure deployed by hand with `sqlcmd -i` (e.g. replaying
+`R__platform-procedures.sql` against a local database) fails on its first insert. Always pass
+`sqlcmd -I`. Also note DbUp journals `R__` scripts like versioned ones: changing
+`R__platform-procedures.sql` doesn't re-run it on an existing database — the SQL Database Project
+publish is what deploys changed procedures there.
 
 ---
 
