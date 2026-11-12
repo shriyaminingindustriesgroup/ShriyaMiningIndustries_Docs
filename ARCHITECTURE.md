@@ -303,7 +303,7 @@ ever reached CI, but would be a nasty one to debug blind if it recurred.
   PDF is revision 1 and **every later PDF of the same PO# is an update** — lines are matched on SKU
   (letters/digits only, + occurrence), changed lines keep their `POLineId`/Line Id/invoice history,
   new lines get the next number, and missing lines get `RemovedInRevision` (never deleted; they can't
-  be invoiced again). **Line Ids are generated**: `{BuyerCode}-{PO#}-{NN}`. Checks before saving:
+  be invoiced again). **Line Ids are generated**: `{PO#}-{NN}` (e.g. `172021-01`); if another buyer already has that PO number, `{PO#}-{NN}-B{BuyerId}` (e.g. `172021-01-B2`) so Line Ids stay unique across buyers, with a note on the import screen. A saved PO keeps its Line Ids across revisions. Checks before saving:
   qty × price (and alt qty × alt price) = Extended per line, lines = Subtotal = Total (acknowledgeable),
   whole quantities, buyer/supplier names, older file version (`_N_` in the file name). **Invoice
   rates for PO lines are locked to the PO unit price** (service check naming the line + SQL backstop;
