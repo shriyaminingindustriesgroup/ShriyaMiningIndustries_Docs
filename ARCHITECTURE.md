@@ -384,11 +384,15 @@ build; don't do that.
    | Approver | Read invoices, download files, view reports (`invoice.approve` is granted but can't change status today — reserved for a future buyer-side approver). |
    | User / Viewer | Unchanged from `V003`. |
 
-   **Invoice status** changes only through the buttons on the invoice page
-   (`POST /api/invoices/{id}/status`, needs `invoice.status`); the editors no longer have a status
-   field, and the API refuses a status change sent with an edit. Every change is in the invoice's
-   version history. **Only Draft invoices can be edited** — to fix an approved or shipped invoice an
-   Admin moves it back to Draft first.
+   **Invoice status** is a dropdown on the invoice page (with **Update status**:
+   `POST /api/invoices/{id}/status`) and on both editors (Edit invoice, PO invoice review), where it is
+   saved **together with the edits in one request** (`PATCH /api/invoices/{id}` with `status`). Either way
+   it needs `invoice.status` and follows the rules above; every change is in the invoice's version
+   history. **Only Draft invoices can be edited** — or edited in the same save that moves the invoice
+   back to Draft (Admin). After every save the app opens the invoice's page.
+
+   **Home page:** PO Import for anyone with `file.upload` (Admin, Manager, User); Invoices for
+   everyone else. Admin pages also check the role by address, not just in the menu.
 
 ---
 
