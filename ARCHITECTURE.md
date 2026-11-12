@@ -303,7 +303,8 @@ ever reached CI, but would be a nasty one to debug blind if it recurred.
   PDF is revision 1 and **every later PDF of the same PO# is an update** — lines are matched on SKU
   (letters/digits only, + occurrence), changed lines keep their `POLineId`/Line Id/invoice history,
   new lines get the next number, and missing lines get `RemovedInRevision` (never deleted; they can't
-  be invoiced again). **Line Ids are generated**: `{PO#}-{NN}` (e.g. `172021-01`); if another buyer already has that PO number, `{PO#}-{NN}-B{BuyerId}` (e.g. `172021-01-B2`) so Line Ids stay unique across buyers, with a note on the import screen. A saved PO keeps its Line Ids across revisions. Checks before saving:
+  be invoiced again). **Line Ids are generated**: `{PO#}-{NN}` (e.g. `172021-01`); if another buyer already has that PO number, `{PO#}-{NN}-B{BuyerId}` (e.g. `172021-01-B2`) so Line Ids stay unique across buyers, with a note on the import screen. A saved PO keeps its Line Ids across revisions.
+- **Crate numbers run on across invoices** (V012): the first crate is 1000 and each new PO invoice continues after the highest crate number any invoice uses (`app.Invoice.CrateStart`/`CrateEnd`). The server assigns them on save and rewrites the document's start and per-line ranges; a Draft keeps its start when edited; **Manager and Admin** may type another start. The save procedures hold an app lock and refuse any range that overlaps another invoice's (50409, naming it); an automatic range taken meanwhile is retried once. Checks before saving:
   qty × price (and alt qty × alt price) = Extended per line, lines = Subtotal = Total (acknowledgeable),
   whole quantities, buyer/supplier names, older file version (`_N_` in the file name). **Invoice
   rates for PO lines are locked to the PO unit price** (service check naming the line + SQL backstop;
