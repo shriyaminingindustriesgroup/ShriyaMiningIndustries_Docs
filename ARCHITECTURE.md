@@ -393,6 +393,19 @@ build; don't do that.
    history. **Only Draft invoices can be edited** — or edited in the same save that moves the invoice
    back to Draft (Admin). After every save the app opens the invoice's page.
 
+   **Status sync (ticket 382840, V013):** invoice statuses are Draft → In Review → Approved or
+   **Rejected** (remarks required; editable again, then back to In Review) → Approved → **Final
+   Information Pending** → **In Transit** → **Delivered** (formerly Shipped). Manager takes the next
+   step only; Admin any status to any status. **Approved and later need the container no. and shipping
+   reference** (Shipping details card on the invoice page, or the review page's header fields). PO line
+   and PO statuses are **stored** (`sales.POLine.Status`, `sales.POStatus`) and recalculated by
+   `sales.usp_POStatus_Recalculate` in the same transaction as every invoice create/update/delete, PO
+   confirm and spreadsheet upload. Line: least advanced of its invoices (Invoiced, In Review, Approved,
+   In Transit, Delivered / Partially Delivered), Open when on none, plus Removed and Over-invoiced. PO:
+   Fulfilled (every line Delivered), Partially Fulfilled, Open. Every status change is recorded in
+   `app.InvoiceStatusChange` (who, when, from/to, remarks). Tracking hides Fulfilled POs unless
+   "Show fulfilled POs" is ticked.
+
    **Pages:** **Create Invoice** (`/create-invoice`, the home page for anyone with `file.upload`) picks lines from saved POs, then review & save; editing a PO invoice opens it too. **PO Import** (`/po-import`) only uploads and saves POs, then offers Create invoice. **Home page:** Create Invoice for anyone with `file.upload` (Admin, Manager, User); Invoices for
    everyone else. Admin pages also check the role by address, not just in the menu.
 
