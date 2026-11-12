@@ -393,7 +393,7 @@ build; don't do that.
    history. **Only Draft invoices can be edited** — or edited in the same save that moves the invoice
    back to Draft (Admin). After every save the app opens the invoice's page.
 
-   **Home page:** PO Import for anyone with `file.upload` (Admin, Manager, User); Invoices for
+   **Pages:** **Create Invoice** (`/create-invoice`, the home page for anyone with `file.upload`) picks lines from saved POs, then review & save; editing a PO invoice opens it too. **PO Import** (`/po-import`) only uploads and saves POs, then offers Create invoice. **Home page:** Create Invoice for anyone with `file.upload` (Admin, Manager, User); Invoices for
    everyone else. Admin pages also check the role by address, not just in the menu.
 
 ---
