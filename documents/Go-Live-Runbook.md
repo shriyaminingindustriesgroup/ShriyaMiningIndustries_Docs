@@ -7,9 +7,9 @@ the steps in order: each one depends on the ones before it.
 
 | Run | Steps | Goal / expected result |
 |---|---|---|
-| **Test, run 1** | Part B (clean) → C1–C5 (buyer, POs from April 2026) → C7 (old invoices) | Find out which POs are missing. On **Old invoices → Missing POs**, click **Copy list** and keep it |
+| **Test, run 1** | Part B (clean) → C1–C4 (buyers, POs from April 2026) → C7 (old invoices) | Find out which POs are missing. On **Old invoices → Missing POs**, click **Copy list** and keep it |
 | *Between runs* | Collect the PDFs of the POs on that list (including pre-April ones) | — |
-| **Test, run 2** | Part B (clean) → C1–C5 with **all** POs (April onwards + the missing ones) → C7 | **Missing POs is empty**: every old invoice line is linked to a PO line (only samples and discounts stay LEGACY, by design) → Part D checks |
+| **Test, run 2** | Part B (clean) → C1–C4 with **all** POs (April onwards + the missing ones) → C7 | **Missing POs is empty**: every old invoice line is linked to a PO line (only samples and discounts stay LEGACY, by design) → Part D checks |
 | **Prod** | Exactly as run 2: Part A3 → B → C → D | Same result as run 2; then start creating new invoices |
 
 Notes:
@@ -71,7 +71,7 @@ transaction: if anything fails, nothing is deleted.
 
 1. Make sure you're in the right database (`shriyaminingdbtest` or `shriyaminingdb`).
 2. Paste the script and run it.
-3. Check the counts at the end: invoices, POs and buyers 0; users and roles unchanged.
+3. Check the counts at the end: invoices and POs 0; buyers, users and roles unchanged.
 
 To only see the counts without deleting, change the line to `DECLARE @Confirm NVARCHAR(50) = N'';`.
 
@@ -79,16 +79,17 @@ Settings at the top of the script:
 
 | Setting | Default | Meaning |
 |---|---|---|
-| `@KeepBuyers` | `0` | `0` deletes buyers and their ship-to addresses (you add the real ones in step C3). `1` keeps them |
+| `@KeepBuyers` | `1` | Buyers and their ship-to addresses are **kept** (they're added by hand in Admin → Buyers). `0` deletes them too |
 | `@KeepCrateTypes` | `1` | Crate types are **kept**: invoice lines need them for crate sizes and the container fit check |
 | `@ClearLogs` | `1` | Clears the error log and event log |
 
-Always kept: users, roles, permissions, the company profile, crate types (by default), error codes,
+Always kept: users, roles, permissions, the company profile, buyers and crate types (by default), error codes,
 and the migration journal.
 
 ### Option 2: the manual script (same result, no row counts or confirm step)
 ```sql
 SET XACT_ABORT ON;   -- any error rolls back everything
+DECLARE @KeepBuyers BIT = 1;   -- 1: keep buyers and their ship-to addresses (the default); 0: delete them too
 BEGIN TRAN;
 
 -- Invoices (uploads point at invoices; invoice lines point at PO lines)
@@ -105,6 +106,7 @@ UPDATE sales.PurchaseOrder SET CurrentDocumentId = NULL;  -- PO -> its current P
 UPDATE sales.POLine        SET LatestImportRowId = NULL;  -- PO line -> its latest stored row
 
 -- Children before parents
+DELETE FROM sales.POEdit;         -- Edit PO history (who changed what, and why)
 DELETE FROM sales.POStatus;       -- stored PO statuses
 DELETE FROM sales.POImportRow;    -- -> POLine, POImportBatch
 DELETE FROM sales.POLine;         -- -> PurchaseOrder, POImportBatch
@@ -112,9 +114,12 @@ DELETE FROM sales.PODocument;     -- -> PurchaseOrder (the stored PDFs)
 DELETE FROM sales.PurchaseOrder;
 DELETE FROM sales.POImportBatch;
 
--- Test buyers too (recommended, since buyers are added fresh in step C3)
-DELETE FROM app.BuyerAddress;
-DELETE FROM app.Buyer;
+-- Buyers: kept unless @KeepBuyers = 0 (they're added by hand in Admin → Buyers)
+IF @KeepBuyers = 0
+  BEGIN
+    DELETE FROM app.BuyerAddress;
+    DELETE FROM app.Buyer;
+  END;
 
 COMMIT;
 ```
@@ -129,9 +134,9 @@ or the whole transaction rolls back.
 |---|---|---|---|
 | C1 | **Company profile**: legal name, address, IEC, bank, declaration | Admin → Company profile | Printed on every invoice |
 | C2 | **Crate types**: every crate size you use, with correct inside dimensions | Admin → Crate types | Needed for crate sizes and the 20 ft container fit check |
-| C3 | **Buyers**: name, code (e.g. NSR) and PO format (PDF) for each buyer | Admin → Buyers | A PO upload needs its buyer first |
+| C3 | **Buyers**, by hand: name, code (e.g. NSR), PO format (PDF), address, phone, fax, email, website, country, and **every ship-to address** (Anaheim, Atlanta Warehouse…). Buyers are kept by the clean-up, so on later runs only check them | Admin → Buyers | A PO upload needs its buyer first. The PO upload never changes a buyer; a PO whose Ship To matches a saved address is linked to it (for the ship-to filters) |
 | C4 | **Upload POs from April 2026 to today.** If a PO has several versions (`_0_`, `_1_`…), upload the oldest first | PO Import | Each PO saved; versions show v1, v2… |
-| C5 | On **each buyer's first PO**, the "buyer details differ" panel appears: tick the name, address, phone, fax, email, website and the **Ship To**, then **Update buyer** | PO Import → review | Admin → Buyers shows the details and ship-to addresses (Anaheim, Atlanta Warehouse…) |
+| C5 | *(Removed: the PO upload no longer offers to update buyers. Add buyer details and ship-to addresses in C3.)* | | |
 | C6 | **Pre-April POs that still have something left to ship**: upload them too, plus their pre-April invoices (C7) | PO Import | Otherwise their remaining quantity is wrong |
 | C7 | **Upload the old invoices from April 2026 to today**: drop all the files at once, then **Check** each one: confirm the PO line for every row, then **Save old invoice** as Delivered (or In Transit if still at sea) | Invoices → Upload old invoices | Every file shows **Saved** on Old invoices |
 | C8 | Lines whose PO isn't in the app are saved as **LEGACY** (not tracked), with no check needed. Review the **Missing POs** panel | Old invoices → Missing POs (Copy list) | Run 1: the list of POs to collect. Run 2 and Prod: empty |
