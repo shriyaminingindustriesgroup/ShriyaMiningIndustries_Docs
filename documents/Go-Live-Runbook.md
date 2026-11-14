@@ -1,7 +1,26 @@
 # Go-live runbook: clean data, load POs and old invoices (Test, then Prod)
 
-Agreed 2026-11-14. Run the whole thing on **Test** first as a rehearsal, then the same steps on
-**Prod**. Do the steps in order: each one depends on the ones before it.
+Agreed 2026-11-14. Rehearse on **Test** twice, then run once on **Prod** (see the plan below). Do
+the steps in order: each one depends on the ones before it.
+
+## The plan: two rehearsals on Test, then Prod
+
+| Run | Steps | Goal / expected result |
+|---|---|---|
+| **Test, run 1** | Part B (clean) → C1–C5 (buyer, POs from April 2026) → C7 (old invoices) | Find out which POs are missing. On **Old invoices → Missing POs**, click **Copy list** and keep it |
+| *Between runs* | Collect the PDFs of the POs on that list (including pre-April ones) | — |
+| **Test, run 2** | Part B (clean) → C1–C5 with **all** POs (April onwards + the missing ones) → C7 | **Missing POs is empty**: every old invoice line is linked to a PO line (only samples and discounts stay LEGACY, by design) → Part D checks |
+| **Prod** | Exactly as run 2: Part A3 → B → C → D | Same result as run 2; then start creating new invoices |
+
+Notes:
+- The **Missing POs** panel (Old invoices page) lists every PO number the old invoices mention that
+  isn't in the app, with the invoices that mention it. Sample crates and "LESS DISCOUNT" lines have
+  no PO number and never appear there.
+- A PO uploaded **after** an old invoice was saved stays on the list under "Uploaded since, but
+  already saved as LEGACY". That invoice isn't tracked against the PO. Either an Admin deletes the
+  old invoice and you check it again (keeps the real invoice number), **or** use **Tracking → By PO
+  → Mark shipped** on that PO (records it as `GL-<PO#>`, PO shows Fulfilled). Never both for the
+  same PO, or the quantities count twice.
 
 | | Test | Prod |
 |---|---|---|
@@ -46,11 +65,15 @@ Open Azure portal → the database (`shriyaminingdbtest` or `shriyaminingdb`) �
 ### Option 1 (recommended): the safe script
 File: `ShriyaMiningIndustries_api/database/scripts/go-live-clear-business-data.sql`
 
-1. Paste it and run it **as it is**. It deletes nothing; it lists each table's row count and
-   whether it would be deleted or kept.
-2. Check the numbers.
-3. Change `@Confirm` to `N'DELETE ALL BUSINESS DATA'` and run it again. Everything is deleted in one
-   transaction: if anything fails, nothing is deleted.
+**The script's `@Confirm` is already set to `N'DELETE ALL BUSINESS DATA'`: running it deletes
+straight away** (it lists the row counts before deleting and after). Everything is deleted in one
+transaction: if anything fails, nothing is deleted.
+
+1. Make sure you're in the right database (`shriyaminingdbtest` or `shriyaminingdb`).
+2. Paste the script and run it.
+3. Check the counts at the end: invoices, POs and buyers 0; users and roles unchanged.
+
+To only see the counts without deleting, change the line to `DECLARE @Confirm NVARCHAR(50) = N'';`.
 
 Settings at the top of the script:
 
@@ -111,7 +134,7 @@ or the whole transaction rolls back.
 | C5 | On **each buyer's first PO**, the "buyer details differ" panel appears: tick the name, address, phone, fax, email, website and the **Ship To**, then **Update buyer** | PO Import → review | Admin → Buyers shows the details and ship-to addresses (Anaheim, Atlanta Warehouse…) |
 | C6 | **Pre-April POs that still have something left to ship**: upload them too, plus their pre-April invoices (C7) | PO Import | Otherwise their remaining quantity is wrong |
 | C7 | **Upload the old invoices from April 2026 to today**: drop all the files at once, then **Check** each one: confirm the PO line for every row, then **Save old invoice** as Delivered (or In Transit if still at sea) | Invoices → Upload old invoices | Every file shows **Saved** on Old invoices |
-| C8 | Lines whose PO isn't in the app are saved as **LEGACY** (not tracked). Review them | Invoices → search "LEGACY" | Only pre-April POs, samples and discounts should be LEGACY |
+| C8 | Lines whose PO isn't in the app are saved as **LEGACY** (not tracked), with no check needed. Review the **Missing POs** panel | Old invoices → Missing POs (Copy list) | Run 1: the list of POs to collect. Run 2 and Prod: empty |
 
 Why this order:
 - **POs before old invoices.** An old invoice's lines can only be matched to PO lines that are
@@ -133,7 +156,7 @@ Why this order:
 | D5 | Crate numbers continue | Create invoice → pick lines → Review (don't save) | Crates start after the last old crate (e.g. 1011) |
 | D6 | Crate sizes available | Create invoice → Review → crate size dropdown | Your crate types are listed |
 
-When D1–D6 look right on **Test**, repeat Parts A–D on **Prod**. Then start creating new invoices.
+When D1–D6 look right on **Test run 2**, repeat Parts A3–D on **Prod**. Then start creating new invoices.
 
 ---
 
