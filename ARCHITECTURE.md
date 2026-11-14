@@ -317,6 +317,27 @@ ever reached CI, but would be a nasty one to debug blind if it recurred.
   `POST /api/purchase-orders/documents/{id}/confirm|discard`, `GET /api/purchase-orders/{id}`,
   `GET /api/purchase-orders/documents/{id}/file` (also `file.download`), `GET /api/po-ledger/line-prices`.
   Storage: the two sample PDFs are 27 KB and 174 KB — 10,000 such POs ≈ 0.3–1.9 GB.
+- **Old invoices before go-live (V018)**: `app.Invoice.IsLegacy` marks an invoice made in the old
+  Excel process and recorded so its PO lines count as shipped. It keeps its own plain number ("72")
+  in `InvoiceNumber` (app numbers are `SMI-YYYY-MM-NNN`, so they can't clash; the unique index refuses
+  a second "72"). Its lines are read-only; its status can be set to any value, in either direction,
+  without shipping details (`usp_Invoice_SetLegacyStatus`); the normal edit and status paths refuse it.
+  `usp_Invoice_CreateLegacy` skips the checks that only apply to app invoices: PO price, remaining
+  quantity (an old invoice may over-ship; the line then shows Over-invoiced), container fit, shipping.
+  A line without a PO line may have a negative rate (the "LESS DISCOUNT" line). Its crate range is
+  stored only when it doesn't overlap another invoice's, so the crate counter (largest + 1) and the
+  overlap checks work unchanged. `app.LegacyInvoiceUpload` keeps each uploaded old Excel file
+  (`Content VARBINARY(MAX)`), what was read from its INV sheet (ExcelDataReader, MIT, reads .xls and
+  .xlsx; fields found by their labels), the user's draft choices and the invoice it became.
+  `usp_Invoice_DeleteLegacy` (Admin) deletes one, frees its number and returns its file to the list.
+  Lines whose PO isn't in the app use the fixed PO reference `LEGACY`. Routes (Admin or Manager):
+  `POST /api/legacy-invoices/uploads`, `GET /api/legacy-invoices`, `GET|DELETE /api/legacy-invoices/uploads/{id}`,
+  `PUT .../uploads/{id}/draft`, `POST .../uploads/{id}/save`, `POST /api/legacy-invoices` (no file),
+  `POST /api/legacy-invoices/status`, `POST /api/legacy-invoices/{id}/delete`, `GET /api/legacy-invoices/file`,
+  `GET /api/legacy-invoices/po-open-lines`, `POST /api/legacy-invoices/mark-shipped` ("Mark as shipped
+  before go-live": one Delivered old invoice numbered `GL-<PO#>` for everything still open). V018 also
+  widens `app.Buyer.Phone` to 40 characters (buyers in any country), and the buyer code can now change
+  at any time (it's only a label; POs and invoices use `BuyerId`).
 - **Invoice currency (V009)** — `app.Invoice.Currency CHAR(3)` default `USD`, returned as
   `currency`. PO invoices carry no tax (the printed export invoice has no tax column); totals
   show Tax 0.00.
