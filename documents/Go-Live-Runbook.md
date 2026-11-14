@@ -19,8 +19,8 @@ Notes:
 - A PO uploaded **after** an old invoice was saved stays on the list under "Uploaded since, but
   already saved as LEGACY". That invoice isn't tracked against the PO. Either an Admin deletes the
   old invoice and you check it again (keeps the real invoice number), **or** use **Tracking → By PO
-  → Mark shipped** on that PO (records it as `GL-<PO#>`, PO shows Fulfilled). Never both for the
-  same PO, or the quantities count twice.
+  → Mark shipped** on that PO, entering the **real old invoice number** (required; PO shows Fulfilled).
+  Never both for the same PO, or the quantities count twice.
 
 | | Test | Prod |
 |---|---|---|
@@ -160,8 +160,9 @@ Why this order:
 | D4 | Ship-to links | Tracking → **Ship to** filter | POs listed under their addresses; few or none "Not matched" |
 | D5 | Crate numbers continue | Create invoice → pick lines → Review (don't save) | Crates start after the last old crate (e.g. 1011) |
 | D6 | Crate sizes available | Create invoice → Review → crate size dropdown | Your crate types are listed |
+| D7 | Invoice numbers continue | Invoices (highest number first) | The top invoice is the highest old number (e.g. 71). The first new invoice gets the next number (72), then 73… Plain numbers only, the format downstream systems use |
 
-When D1–D6 look right on **Test run 2**, repeat Parts A3–D on **Prod**. Then start creating new invoices.
+When D1–D7 look right on **Test run 2**, repeat Parts A3–D on **Prod**. Then start creating new invoices.
 
 ---
 
