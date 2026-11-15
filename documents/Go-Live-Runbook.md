@@ -134,7 +134,7 @@ or the whole transaction rolls back.
 |---|---|---|---|
 | C1 | **Company profile**: legal name, address, IEC, bank, declaration | Admin → Company profile | Printed on every invoice |
 | C2 | **Crate types**: every crate size you use, with correct inside dimensions | Admin → Crate types | Needed for crate sizes and the 20 ft container fit check |
-| C3 | **Buyers**, by hand: name, code (e.g. NSR), PO format (PDF), address, phone, fax, email, website, country, and **every ship-to address** (Anaheim, Atlanta Warehouse…). Buyers are kept by the clean-up, so on later runs only check them | Admin → Buyers | A PO upload needs its buyer first. The PO upload never changes a buyer; a PO whose Ship To matches a saved address is linked to it (for the ship-to filters) |
+| C3 | **Buyers**, by hand: name, code (e.g. NSR), PO format (PDF), address, phone, fax, email, website, country, and **every ship-to address** (Anaheim, Atlanta Warehouse…). Buyers are kept by the clean-up, so on later runs only check them | Admin → Buyers | A PO upload needs its buyer first. **Delivery rules**: the deploy sets up the NSR rules once (Admin → Delivery rules); they work when the buyer code is exactly **NSR** (the rules page warns if it's missing). Ship-to rules read the Ship To printed on the PO. The PO upload never changes a buyer; a PO whose Ship To matches a saved address is linked to it (for the ship-to filters) |
 | C4 | **Upload POs from April 2026 to today.** If a PO has several versions (`_0_`, `_1_`…), upload the oldest first | PO Import | Each PO saved; versions show v1, v2… |
 | C5 | *(Removed: the PO upload no longer offers to update buyers. Add buyer details and ship-to addresses in C3.)* | | |
 | C6 | **Pre-April POs that still have something left to ship**: upload them too, plus their pre-April invoices (C7) | PO Import | Otherwise their remaining quantity is wrong |
@@ -161,8 +161,9 @@ Why this order:
 | D5 | Crate numbers continue | Create invoice → pick lines → Review (don't save) | Crates start after the last old crate (e.g. 1011) |
 | D6 | Crate sizes available | Create invoice → Review → crate size dropdown | Your crate types are listed |
 | D7 | Invoice numbers continue | Invoices (highest number first) | The top invoice is the highest old number (e.g. 71). The first new invoice gets the next number (72), then 73… Plain numbers only, the format downstream systems use |
+| D8 | Every PO has a delivery location | Purchase Orders → **Delivery** column (and its ▾) | New York · TLBR, Houston · DAL, Los Angeles · BED / Anaheim, Savannah · Atlanta Warehouse; none left blank. A PO whose items go to different places was blocked at upload |
 
-When D1–D7 look right on **Test run 2**, repeat Parts A3–D on **Prod**. Then start creating new invoices.
+When D1–D8 look right on **Test run 2**, repeat Parts A3–D on **Prod**. Then start creating new invoices.
 
 ---
 
