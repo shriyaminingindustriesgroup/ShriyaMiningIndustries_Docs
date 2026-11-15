@@ -145,8 +145,8 @@ Why this order:
 - **POs before old invoices.** An old invoice's lines can only be matched to PO lines that are
   already in the app. Lines saved before their PO is uploaded become LEGACY and don't reduce the
   PO. Fixing them means an Admin deletes that old invoice and you check it again.
-- **Old invoices before any new invoice.** New invoices continue the crate numbers after the
-  highest old crate (e.g. 1011 after 1010).
+- **Old invoices before any new invoice.** New invoice numbers continue after the highest
+  number in the app, old invoices included (e.g. 78 after 77).
 
 ---
 
@@ -158,7 +158,7 @@ Why this order:
 | D2 | POs show what's really left | Tracking → PO, tick **Show fulfilled** | Fully shipped POs show Fulfilled; open POs show only the true remainder |
 | D3 | Anything odd | Tracking → **Needs a look** (⚠) | Over-invoiced lines only where an old invoice really shipped more |
 | D4 | Ship-to links | Tracking → **Ship to** filter | POs listed under their addresses; few or none "Not matched" |
-| D5 | Crate numbers continue | Create invoice → pick lines → Review (don't save) | Crates start after the last old crate (e.g. 1011) |
+| D5 | Crate numbers by invoice number | Create invoice → pick lines → Review (don't save) → Invoice header | Crate starting no is the invoice's block: 78 → 101, 79 → 201 … 86 → 901, 87 → 101 again (up to 99 crates; a Manager or Admin can type another start). Old invoices keep their crate numbers |
 | D6 | Crate sizes available | Create invoice → Review → crate size dropdown | Your crate types are listed |
 | D7 | Invoice numbers continue | Invoices (highest number first) | The top invoice is the highest old number (e.g. 71). The first new invoice gets the next number (72), then 73… Plain numbers only, the format downstream systems use |
 | D8 | Every PO has a delivery location | Purchase Orders → **Delivery** column (and its ▾) | New York · TLBR, Houston · DAL, Los Angeles · BED / Anaheim, Savannah · Atlanta Warehouse; none left blank. A PO whose items go to different places was blocked at upload |
