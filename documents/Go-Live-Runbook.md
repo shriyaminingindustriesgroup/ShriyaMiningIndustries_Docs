@@ -30,6 +30,8 @@ Notes:
 
 Everything runs on the existing Azure resources: no new services, no new cost.
 
+--TestPipeline
+
 ---
 
 ## Part A: Before you start (both environments)
