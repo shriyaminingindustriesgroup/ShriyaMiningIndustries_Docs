@@ -338,6 +338,23 @@ ever reached CI, but would be a nasty one to debug blind if it recurred.
   before go-live": one Delivered old invoice numbered `GL-<PO#>` for everything still open). V018 also
   widens `app.Buyer.Phone` to 40 characters (buyers in any country), and the buyer code can now change
   at any time (it's only a label; POs and invoices use `BuyerId`).
+- **Email: Services and buyers' invoice email lists (V024, 2026-11-16; part 1 of emailing invoices
+  to buyers for approval, plan in `plan/email-functionality` outside the repos).**
+  `app.OrganizationService` is **Admin → Company profile → Services**: one row per service the system
+  sends email as, with **From / To / CC** (JSON lists), display name, reply-to and a fixed `ServiceKey`
+  the code uses. Two system rows (can't be deleted): `INVOICE_EMAIL` (Invoice Email Service; its To
+  comes from the invoice's buyer, `ToFromBuyer`) and `EMAIL_ALERTS` (who's told when emails fail).
+  V024 creates both **with empty addresses**: they're typed on screen per environment, so no person's
+  address is in a migration. `app.BuyerContact` is each buyer's **invoice email list** (Admin →
+  Buyers → Invoice emails): To (approves), Cc, Bcc; an address once per buyer. `app.EmailLog` keeps
+  every email sent or tried, with the provider's answer. Sending goes through one `IEmailSender`:
+  `SmtpEmailSender` (MailKit, MIT; Zoho Mail today) or `GraphEmailSender` (Microsoft Graph
+  `sendMail`, for the planned move to Microsoft 365), picked by the `EMAIL_PROVIDER` app setting, so
+  the switch is a settings change. Routes: `GET|POST /api/organization/services`,
+  `PUT|DELETE /api/organization/services/{id}`, `POST /api/organization/services/{id}/test-email`
+  (`vendor.manage`), `GET|PUT /api/console/buyers/{id}/invoice-emails` (Admin). Mailbox passwords
+  are never in the database or on screen (§11). The go-live clean-up keeps Services and the buyer
+  lists (the lists go only with `@KeepBuyers = 0`) and clears `EmailLog` with the logs.
 - **Tracking → Product groups on the SKU without its delivery prefix** (2026-11-16, no migration).
   NSR prints a delivery code in front of some SKUs (`BED-GRNABSBLK1224FL` goes to Los Angeles · BED);
   the rest of the SKU names the stone, colour, size and finish (`GRN` granite, `ABSBLK`, `1224`,
@@ -486,6 +503,14 @@ thing that would eventually need watching.
 repo-that-needs-it (`SQL_CONNECTION_STRING`, `SQL_CONNECTION_STRING_TEST`), the SWA's production
 and test environment app settings, and both standalone Function Apps' app settings. This is a
 real rotation/drift risk, flagged explicitly rather than ignored.
+
+**Email (V024, 2026-11-16):** the email settings live only in the app settings of each SWA
+environment (and the standby Function Apps), never in a repo: `EMAIL_PROVIDER` (`Smtp` / `Graph`),
+`EMAIL_SMTP_HOST`, `EMAIL_SMTP_PORT`, and one login per service key, `EMAIL_SMTP_USER__<KEY>` /
+`EMAIL_SMTP_PASSWORD__<KEY>` (the mailbox's Zoho **app-specific password**, a secret). For Microsoft
+365 later: `EMAIL_GRAPH_TENANT_ID`, `EMAIL_GRAPH_CLIENT_ID`, `EMAIL_GRAPH_CLIENT_SECRET` (secret). On
+Test, `EMAIL_TEST_ALLOWLIST` limits who email can go to. The Services screen only shows whether a
+login is set up. These belong in the Key Vault plan below with the SQL password.
 
 **The planned fix (not yet built — architecture decision made, implementation deferred):**
 - **Near-term:** centralize the password in **Azure Key Vault**, one secret per environment.

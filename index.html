@@ -310,6 +310,12 @@ flowchart LR
   delivery place). The prefixes are the <code>itemStartsWith</code> values of the buyer's delivery rules,
   removed only before a dash, and worked out when Tracking reads the data, so nothing is stored or
   backfilled. Everything else keeps the SKU as printed. See ARCHITECTURE.md §7.2.</p>
+  <p><strong>Email (V024):</strong> <strong>Admin → Company profile → Services</strong> lists the email
+  identities the system sends as (From / To / CC per service; the Invoice Email Service's To comes from
+  each buyer), and each buyer has an <strong>invoice email list</strong> (To / CC / BCC). Email goes
+  through one sender interface: Zoho Mail over SMTP today, Microsoft 365 (Graph) later by changing the
+  <code>EMAIL_PROVIDER</code> app setting. Mailbox passwords are app settings only. See ARCHITECTURE.md
+  §7.2 and §11.</p>
 </section>
 
 <section id="auth">
