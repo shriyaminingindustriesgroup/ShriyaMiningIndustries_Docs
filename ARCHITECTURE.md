@@ -338,6 +338,18 @@ ever reached CI, but would be a nasty one to debug blind if it recurred.
   before go-live": one Delivered old invoice numbered `GL-<PO#>` for everything still open). V018 also
   widens `app.Buyer.Phone` to 40 characters (buyers in any country), and the buyer code can now change
   at any time (it's only a label; POs and invoices use `BuyerId`).
+- **Tracking → Product groups on the SKU without its delivery prefix** (2026-11-16, no migration).
+  NSR prints a delivery code in front of some SKUs (`BED-GRNABSBLK1224FL` goes to Los Angeles · BED);
+  the rest of the SKU names the stone, colour, size and finish (`GRN` granite, `ABSBLK`, `1224`,
+  `FL` flamed). `sales.usp_PoFulfillment_GetList` works out each line's `ProductSku` **at read time**
+  from the buyer's active delivery rules: every `itemStartsWith` value (today `TLBR`, `DAL`, `BED`) is a
+  prefix, removed only when followed by a dash (`BEDROCK12` is untouched; the longest prefix wins).
+  By-product rows group on `ProductSku + unit`, so `BED-X` and `X` are one product, with a delivery
+  chip per place and `skus` listing the SKUs as printed. Lines merge **only** when the rest of the SKU
+  is identical, never on the description. It is read-time on purpose: `sales.POLine` is written in four
+  procedures (`usp_POImport_Create`/`_Upsert`, `usp_PurchaseOrder_Confirm`/`_Edit`), and a rule an Admin
+  changes applies at once with nothing to backfill. Only Tracking → Product uses it; PO import, Line Ids,
+  revisions, invoices, Create Invoice and the PO/Invoice tracking views keep the SKU as printed.
 - **Invoice currency (V009)** — `app.Invoice.Currency CHAR(3)` default `USD`, returned as
   `currency`. PO invoices carry no tax (the printed export invoice has no tax column); totals
   show Tax 0.00.

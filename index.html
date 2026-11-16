@@ -305,6 +305,11 @@ flowchart LR
   (published via SqlPackage, excluding tables/data from the diff). Schema: a <code>security</code>
   schema (User/Role/Permission, role-based) and an <code>app</code> schema (Vendor/Buyer/Invoice
   and related master data).</p>
+  <p><strong>Tracking → Product</strong> groups PO lines on the SKU <em>without its delivery prefix</em>
+  (<code>BED-GRNABSBLK1224FL</code> and <code>GRNABSBLK1224FL</code> are one product, with a chip per
+  delivery place). The prefixes are the <code>itemStartsWith</code> values of the buyer's delivery rules,
+  removed only before a dash, and worked out when Tracking reads the data, so nothing is stored or
+  backfilled. Everything else keeps the SKU as printed. See ARCHITECTURE.md §7.2.</p>
 </section>
 
 <section id="auth">
