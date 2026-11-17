@@ -147,13 +147,20 @@ Triggers on push to `main` or `test`. Branch decides the environment end-to-end 
 
 ```mermaid
 flowchart LR
-    Push["push to main or test"] --> Test["test job:\nrestore, build,\nunit tests"]
+    Push["push to main or test"] --> Test["test job:\nrestore, build →\nthrowaway SQL Server, built from the scripts →\nall tests (incl. repository tests)"]
     Test --> Migrate["migrate job:\nopen SQL firewall for runner IP →\nintegration test (always vs. TEST db) →\nDbUp: new V### scripts once,\nevery R__ script (procs, views) again (branch DB) →\nclose firewall"]
     Migrate --> Deploy["deploy job:\npublish API →\nzip + GitHub Release (api-<sha> or api-test-<sha>) →\nazure/login (OIDC) →\ndeploy to branch's Function App →\nrepository_dispatch to UI repo"]
 ```
 
 Key points worth knowing when debugging this pipeline:
 
+- **The test job has its own throwaway SQL Server** (2026-11-17): a `mcr.microsoft.com/mssql/server:2022`
+  container on the runner (free), with a random password made for that run and never stored. The
+  migrator builds an empty database from `database/migrations`, and `SQL_CONNECTION_STRING` points the
+  tests at it, which switches on `ShriyaMiningIndustries.Repositories.Tests` (every repository against
+  real SQL, plus a check that every procedure and view still compiles) and the other database tests.
+  So every push also proves the scripts build an **empty** database. Test projects run one after
+  another (`-m:1`): run together, they made a small database wait for query memory and time out.
 - **The integration test always runs against the test database**, regardless of branch. This was
   deliberately fixed (it used to run against prod on every single deploy) — a throwaway
   health-check test has no business holding a live connection to production.
@@ -507,6 +514,52 @@ Reviewed and **kept on purpose**:
 - **Email columns** are 255 or 320 characters: both hold any real address (the practical maximum is
   254). `security.User.UserId` is a GUID stored as text, and `Invoice.InvoiceDate` is a date stored
   with a time of midnight: changing either touches keys, snapshots and every caller for no gain.
+
+### 7.4 Repository rules (review of 2026-11-17)
+
+Every database call goes through a repository: an interface in the module's `Abstractions`, a
+class in `Infrastructure`, Dapper, parameterised SQL, the cancellation token passed on, and
+connections from `IDbConnectionFactory` (which waits while the database wakes up). Services and
+functions never hold SQL. On top of that:
+
+- **Stored procedure or SQL in the repository?** A stored procedure for anything that changes
+  several rows that must agree, needs locking, or guards money and statuses (invoice create/update
+  and status, the buyer's decision, PO import, roles). Plain SQL in the repository for simple reads
+  and add/change/delete of small set-up rows (services, delivery rules, templates, settings).
+- **All or nothing = one call.** Two writes that must both happen are ONE procedure, or ONE
+  repository method with its own transaction (e.g. `AppSettingsRepository.SaveAsync`), never two
+  repository calls from a service: each call opens its own connection, so they can't share a
+  transaction. A flow that can't be one transaction (an email goes out in the middle) uses explicit
+  states instead (a review request is Pending → Open → closed).
+- **Errors.** Procedures refuse with `THROW 50400` (bad input), `50404` (not found) or `50409`
+  (conflict), with a message written for the user. Repositories are registered with
+  `AddRepository<IX, X>()` (`Shared.Data/RepositoryErrors`), a thin wrapper that turns those into
+  `DatabaseRuleException` (400, **message shown** — it used to be hidden behind "Invalid input
+  provided"), `NotFoundException` and `ConflictException` as they leave any repository
+  (`SqlErrors`), so a service can catch them. `ErrorHandlingMiddleware` uses the same translation as
+  a safety net.
+- **What repositories return.** Lists and screens may return a contract DTO straight from SQL.
+  Anything a service changes and checks rules on comes back as a domain record (`Invoice`,
+  `ReviewLookup`, `OrganizationServiceRecord`) and the service builds the DTO. Applied when code is
+  touched, not as a rewrite.
+- **No database call per item in a loop.** Read everything the loop needs first (e.g. old-invoice
+  import reads all PO lines and taken invoice numbers once, not per file). Bounded loops of a few
+  calls (the ≤ 10 recipients of an invoice email) are fine.
+- **One owner per table.** `app.AppSetting` is only read and written through `IAppSettings`
+  (`Shared.Data/AppSettingsRepository`), whatever the module. The exception is `PayloadLogWriter`'s
+  own read of its three settings, on the failure path, which must not wait for a sleeping database.
+- **Short forms.** `Shared.Data/Db` (`ProcAsync`, `QueryAsync`, `ExecuteAsync`, …) replaces the
+  open-connection / command / Dapper lines; used in new and changed repository code
+  (`ReviewSetupRepository`, `AppSettingsRepository`), and existing methods move over when they're
+  next changed. `Shared.Data`'s three writers (role lookup on every request, error and payload log)
+  keep plain ADO.NET on purpose: they're on the hot or failure path.
+- **Tested against real SQL.** `ShriyaMiningIndustries.Repositories.Tests` runs every repository
+  against a database built from the scripts (in CI on every push, §6.1; locally set
+  `SQL_CONNECTION_STRING` to a database built with the migrator). Its first run found a real bug:
+  a buyer with a ship-to address or invoice emails couldn't be deleted (raw foreign-key error);
+  `usp_Buyer_Delete` now removes the buyer's own set-up rows in the same transaction.
+- `IInvoiceReviewRepository` keeps the sendings (requests, recipients, links, decisions); the email
+  template and each buyer's code choice moved to `IReviewSetupRepository`.
 
 ---
 

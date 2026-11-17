@@ -266,7 +266,7 @@ flowchart LR
   <h3>API repo</h3>
   <div class="mermaid">
 flowchart LR
-    Push["push: main or test"] --> Test["test job<br/>restore, build, unit tests"]
+    Push["push: main or test"] --> Test["test job<br/>restore, build, throwaway SQL Server<br/>built from the scripts, all tests"]
     Test --> Migrate["migrate job<br/>open SQL firewall<br/>integration test (always vs TEST db)<br/>DbUp migration (branch DB)<br/>stored-proc publish (branch DB)<br/>close firewall"]
     Migrate --> Deploy["deploy job<br/>publish API<br/>GitHub Release (branch-prefixed tag)<br/>deploy to branch's Function App<br/>dispatch to UI repo"]
   </div>
@@ -311,6 +311,13 @@ flowchart LR
   purged hourly (payload 30 days, errors 90 days/1 year, events 90 days, email log 1 year); status
   checks on the email tables; an index on every foreign key; duplicate indexes removed. The rules
   are in ARCHITECTURE.md §7.3.</p>
+  <p><strong>Repositories (17 Nov):</strong> every repository is now tested against a real database
+  built from the scripts, in CI on every push (a free, throwaway SQL Server on the runner); the first
+  run found that a buyer with a ship-to address couldn't be deleted (fixed). A stored procedure's own
+  message ("PO format must be Pdf or Spreadsheet") now reaches the user instead of "Invalid input
+  provided", and repositories hand services typed errors (conflict, not found). Rules: one procedure
+  or one transaction for anything all-or-nothing, no database call per item in a loop, one owner per
+  table (<code>IAppSettings</code> for settings). ARCHITECTURE.md §7.4.</p>
   <p><strong>Tracking → Product</strong> groups PO lines on the SKU <em>without its delivery prefix</em>
   (<code>BED-GRNABSBLK1224FL</code> and <code>GRNABSBLK1224FL</code> are one product, with a chip per
   delivery place). The prefixes are the <code>itemStartsWith</code> values of the buyer's delivery rules,
