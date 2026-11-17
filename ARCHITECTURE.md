@@ -338,6 +338,30 @@ ever reached CI, but would be a nasty one to debug blind if it recurred.
   before go-live": one Delivered old invoice numbered `GL-<PO#>` for everything still open). V018 also
   widens `app.Buyer.Phone` to 40 characters (buyers in any country), and the buyer code can now change
   at any time (it's only a label; POs and invoices use `BuyerId`).
+- **Payload log (V026, 2026-11-16).** `log.PayloadLog` stores API calls with their request and
+  response so a failure can be read exactly as it happened. `PayloadLoggingMiddleware` is registered
+  **first** (outside `ErrorHandlingMiddleware`), so it records the final answer, error envelopes
+  included. It reads the request body up front and rewinds it (`EnableBuffering`: some functions dispose
+  the stream after reading it), and swaps the response body for a `CaptureStream` that passes every byte
+  straight on while keeping a copy (first 1 MB, plus total size and SHA-256). Which calls: app settings
+  **`PAYLOAD_LOG_FAILURES` = 1** (status 400 and above) and **`PAYLOAD_LOG_SUCCESSES` = 0** (built, off
+  until needed), re-read by each running copy at most once a minute. **Redaction** (`PayloadRedactor`,
+  unit-tested): login/session headers (`x-ms-client-principal…`, Authorization, cookies), `X-Review-Token`,
+  and JSON fields or query values named like a password/secret/token become `[redacted]`, and so does
+  `code` on the buyer's `public/` routes (the one-time code; elsewhere `code` is an ordinary product or
+  error code); a `…Base64` field (the emailed PDF), a binary body (PDF/Excel download) or a text value
+  over 16 KB becomes a one-line summary with size and SHA-256; a body is cut at 32 KB (`Truncated`).
+  Never logged: `health`, `ping`, Swagger/OpenAPI, and `console/payload-log` itself. **Retention:**
+  `PAYLOAD_LOG_DAYS` = 30. Static Web Apps' managed Functions have no timer triggers, so the API purges
+  **opportunistically**: at most once an hour per running copy, `DELETE TOP (2000)` up to 10 batches,
+  so no extra resource or cost. **Link to errors:** `log.ErrorLog.PayloadLogId` (nullable, optional:
+  not every error comes from an API call) is filled when the payload row is written, matching on the
+  request's CorrelationId; no foreign key, so purging payloads never touches the longer-lived error
+  rows. A call the Functions **host** rejects before the worker runs (e.g. no matching route) isn't
+  logged. Admin → **Payload logs** (`/admin/payloads`; Admin role + `errorlog.view`): list with
+  filters, the call in full, and the switches/days (`GET /api/console/payload-log`, `.../{id}`,
+  `GET|PUT .../settings`); Error logs → **View payload** opens the matching call. The go-live clean-up
+  clears it with the other logs. Cost: one extra insert per logged call, inside the existing database.
 - **Emailing invoices to buyers for approval (V025, 2026-11-16; part 2).** On a Draft/Rejected
   invoice, choosing In Review turns **Save** into **Save and send email**: the edits are saved
   (status kept), the browser builds the **PDF** from the Preview/Print layout (`invoice-pdf.ts`:
@@ -638,6 +662,18 @@ workflow that reads from it (not just the ones that write to it) needs its own f
 added as a secret, matching the pattern already used for `UI_REPO_DISPATCH_TOKEN` /
 `API_REPO_READ_TOKEN` (§6.2). Easy to miss because the step worked fine right up until the
 visibility change, with no code change of its own to point at.
+
+**`StatusCode cannot be set because the response has already started` after a successful call
+(found 2026-11-16).** With the ASP.NET Core integration, `HttpResponseData` writes straight to the
+real response, so the status code is sent with the first bytes of the body. Six `Json(...)` helpers
+(buyers, container fit, delivery rules, email services, invoice review, role create) set
+`response.StatusCode` again *after* `WriteAsJsonAsync`, which throws. The caller still got the right
+answer (200/201 and the body), but the function was then marked Failed and `ErrorHandlingMiddleware`
+wrote a spurious `API-ERROR-500` row to `log.ErrorLog` for every successful call through them (it
+couldn't send its own 500 either, for the same reason). Found when the payload log recorded these calls
+as 500s. Fix: set the status once, in `CreateResponse(status)`, and never after writing; worker 2.x's
+`WriteAsJsonAsync` keeps it. If the error log shows `API-ERROR-500` rows whose stack ends in
+`set_StatusCode`, that's this pattern somewhere new.
 
 **`Msg 1934 … SET options have incorrect settings: 'QUOTED_IDENTIFIER'` on a PO upload.**
 `sales.POLine` and `sales.POImportRow` have filtered indexes, which need `QUOTED_IDENTIFIER ON`

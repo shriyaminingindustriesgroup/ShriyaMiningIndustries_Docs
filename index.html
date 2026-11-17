@@ -316,6 +316,12 @@ flowchart LR
   through one sender interface: Zoho Mail over SMTP today, Microsoft 365 (Graph) later by changing the
   <code>EMAIL_PROVIDER</code> app setting. Mailbox passwords are app settings only. See ARCHITECTURE.md
   §7.2 and §11.</p>
+  <p><strong>Payload log (V026):</strong> API calls that fail (status 400 and above) are stored with
+  their request and response for 30 days, then deleted by the API itself (at most hourly, in small
+  batches; Static Web Apps has no timers). Successful calls can be logged too, but that switch is off.
+  Secrets are never stored (login headers, review tokens, one-time codes read <code>[redacted]</code>) and
+  files appear only as size + SHA-256. Each error log row links to the payload of the call that raised it.
+  Admin → <strong>Payload logs</strong> shows them and holds the switches. See ARCHITECTURE.md §7.2.</p>
   <p><strong>Emailing invoices for approval (V025):</strong> choosing In Review turns Save into
   <strong>Save and send email</strong>: a PDF of the invoice is built in the browser and emailed, each To
   person with their own link (only a hash of it is stored), CC/BCC a copy without links; the invoice moves
