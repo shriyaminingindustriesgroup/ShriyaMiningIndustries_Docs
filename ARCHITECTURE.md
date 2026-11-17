@@ -730,8 +730,8 @@ SQL login would stop working). In `shriyaminingdb` the pipeline's Azure identity
 Actions OIDC app registration `ShriyaMiningIndustriesApi-github-actions` — is a user
 (`CREATE USER … FROM EXTERNAL PROVIDER`) in `db_owner`, and the `main` migrate step connects with
 `Authentication=Active Directory Default`, which uses the Azure CLI login from `azure/login`
-(`SQL_PASSWORDLESS_CONNECTION` in the workflow). The `SQL_CONNECTION_STRING` GitHub secret is then
-no longer used and is to be deleted.
+(`SQL_PASSWORDLESS_CONNECTION` in the workflow). The `SQL_CONNECTION_STRING` GitHub secret (the
+administrator password) was deleted on 2026-11-17 after the first passwordless run succeeded.
 
 **Still holding the admin password** (a rotation/drift risk, flagged rather than ignored): the
 GitHub secret `SQL_CONNECTION_STRING_TEST` (Test migrations and the test-database health check),
