@@ -268,7 +268,7 @@ flowchart LR
 flowchart LR
     Push["push: main or test"] --> Test["test job<br/>restore, build, throwaway SQL Server<br/>built from the scripts, all tests"]
     Test --> Migrate["migrate job<br/>open SQL firewall<br/>integration test (always vs TEST db)<br/>DbUp migration (branch DB)<br/>stored-proc publish (branch DB)<br/>close firewall"]
-    Migrate --> Deploy["deploy job<br/>publish API<br/>GitHub Release (branch-prefixed tag)<br/>deploy to branch's Function App<br/>dispatch to UI repo"]
+    Migrate --> Deploy["deploy job<br/>publish API<br/>GitHub Release (branch-prefixed tag)<br/>dispatch to UI repo"]
   </div>
   <h3>UI repo</h3>
   <div class="mermaid">

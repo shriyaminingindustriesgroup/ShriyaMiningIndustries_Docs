@@ -117,8 +117,8 @@ one Azure subscription.
 | Resource | Name | Type / SKU | Notes |
 |---|---|---|---|
 | Static Web App | `ShriyaMiningIndustries-ui` | Free tier | 2 of its 3 allowed staging environments in use (`default`=prod, `test`). Co-located Functions runtime, no linked backend. |
-| Function App (prod) | `ShriyaMiningIndustries-api` | Consumption (Y1), Windows, `dotnet-isolated` | Decouple-ready fallback, not in the live traffic path (see §3). |
-| Function App (test) | `ShriyaMiningIndustries-api-test` | Consumption (Y1), Windows, `dotnet-isolated` | Same role as above, for test. |
+| Function App (prod) | `ShriyaMiningIndustries-api` | Consumption (Y1), Windows, `dotnet-isolated` | **Stopped, and no longer deployed to (2026-11-17)** — a decouple-ready fallback, never in the live traffic path (see §3). On its own it trusted any caller's identity header, so anyone could have claimed to be any user (§8). Start it again only with App Service Authentication turned on. |
+| Function App (test) | `ShriyaMiningIndustries-api-test` | Consumption (Y1), Windows, `dotnet-isolated` | Same as above, for test: stopped, not deployed to (2026-11-17). |
 | Storage account | `stshriyaminingapi` | Standard_LRS | Backs the prod Function App's internal state. |
 | Storage account | `stshriyaminingapitest` | Standard_LRS | Backs the test Function App's internal state. |
 | SQL Server | `shriyaminingindustries` (`shriyaminingindustries.database.windows.net`) | Logical server | SQL-auth admin login configured (ask a team member for the username/password — neither is written down here; this repo is public). No Azure AD admin configured yet. |
@@ -158,7 +158,7 @@ Triggers on push to `main` or `test`. Branch decides the environment end-to-end 
 flowchart LR
     Push["push to main or test"] --> Test["test job:\nrestore, build →\nthrowaway SQL Server, built from the scripts →\nall tests (incl. repository tests)"]
     Test --> Migrate["migrate job:\nopen SQL firewall for runner IP →\nintegration test (always vs. TEST db) →\nDbUp: new V### scripts once,\nevery R__ script (procs, views) again (branch DB) →\nclose firewall"]
-    Migrate --> Deploy["deploy job:\npublish API →\nzip + GitHub Release (api-<sha> or api-test-<sha>) →\nazure/login (OIDC) →\ndeploy to branch's Function App →\nrepository_dispatch to UI repo"]
+    Migrate --> Deploy["deploy job:\npublish API →\nzip + GitHub Release (api-<sha> or api-test-<sha>) →\nrepository_dispatch to UI repo\n(the UI repo deploys it with the Static Web App)"]
 ```
 
 Key points worth knowing when debugging this pipeline:
@@ -546,7 +546,9 @@ functions never hold SQL. On top of that:
   `DatabaseRuleException` (400, **message shown** — it used to be hidden behind "Invalid input
   provided"), `NotFoundException` and `ConflictException` as they leave any repository
   (`SqlErrors`), so a service can catch them. `ErrorHandlingMiddleware` uses the same translation as
-  a safety net.
+  a safety net, and also answers a request body that isn't readable JSON (empty or broken) with
+  **400 `API-BODY-400`** instead of a 500 and a false alarm in the error log
+  (`ErrorHandlingMiddleware.ToAppException`, 2026-11-17).
 - **What repositories return.** Lists and screens may return a contract DTO straight from SQL.
   Anything a service changes and checks rules on comes back as a domain record (`Invoice`,
   `ReviewLookup`, `OrganizationServiceRecord`) and the service builds the DTO. Applied when code is
@@ -596,6 +598,18 @@ functions never hold SQL. On top of that:
    email exists as an active row in `security.User` with a role assigned. Login success and
    application-level authorization are two separate things — don't conflate them when debugging a
    "logged in but nothing works" report.
+   **The header is trusted only because the Static Web App sits in front.** Every endpoint is
+   `AuthorizationLevel.Anonymous` at the Azure level; the Static Web App removes any
+   `x-ms-client-principal` a caller sends and adds its own after a real sign-in. Run the same API
+   anywhere else and the header is just text the caller chose. Found 2026-11-17: the standalone
+   Function Apps (`ShriyaMiningIndustries-api`, `-api-test`) answered a made-up user as signed in,
+   with the production standby connected to the production database — anyone sending an admin's
+   email in that header would have had that admin's access there. They were stopped and taken out
+   of the pipeline the same day (§5, §6). **Rule:** never expose this API except behind the Static
+   Web App, or behind **App Service Authentication** (free, built into Function Apps: Azure checks
+   the sign-in or token itself and strips forged headers). That is also how a mobile app would call
+   it (Entra sign-in in the app, a token on each call); the middleware would then also need to read
+   App Service Authentication's header format, which differs from the Static Web App's.
 4. There is **no self-service bootstrap**: the very first admin user in a fresh database can't be
    created through the app's own admin console (that requires an already-authenticated admin to
    call it — chicken and egg). Bootstrap it directly via SQL instead:
