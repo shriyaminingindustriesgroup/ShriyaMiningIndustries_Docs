@@ -762,9 +762,13 @@ only** (the pipeline's `SQL_CONNECTION_STRING` GitHub secret), which genuinely n
 (a named person's Entra account; "Microsoft Entra authentication only" stays **off**, or the app's
 SQL login would stop working). In `shriyaminingdb` the pipeline's Azure identity — the GitHub
 Actions OIDC app registration `ShriyaMiningIndustriesApi-github-actions` — is a user
-(`CREATE USER … FROM EXTERNAL PROVIDER`) in `db_owner`, and the `main` migrate step connects with
-`Authentication=Active Directory Default`, which uses the Azure CLI login from `azure/login`
-(`SQL_PASSWORDLESS_CONNECTION` in the workflow). The `SQL_CONNECTION_STRING` GitHub secret (the
+(`CREATE USER … FROM EXTERNAL PROVIDER`) in `db_owner`, and the `main` migrate step gets a database
+access token from that login (`az account get-access-token --resource https://database.windows.net/`)
+and passes it to the migrator (`SQL_ACCESS_TOKEN`; the connection string `SQL_PASSWORDLESS_CONNECTION`
+has no user or password). A first version used `Authentication=Active Directory Default`, which
+tries a managed identity before the CLI login; on a GitHub runner that probe sometimes errors
+instead of passing on, and one production migration failed that way (nothing deployed; fixed the
+same day). The `SQL_CONNECTION_STRING` GitHub secret (the
 administrator password) was deleted on 2026-11-17 after the first passwordless run succeeded.
 
 **Still holding the admin password** (a rotation/drift risk, flagged rather than ignored): the
