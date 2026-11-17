@@ -122,7 +122,7 @@ one Azure subscription.
 | Storage account | `stshriyaminingapi` | Standard_LRS | Backs the prod Function App's internal state. |
 | Storage account | `stshriyaminingapitest` | Standard_LRS | Backs the test Function App's internal state. |
 | SQL Server | `shriyaminingindustries` (`shriyaminingindustries.database.windows.net`) | Logical server | SQL-auth admin login configured (ask a team member for the username/password — neither is written down here; this repo is public). No Azure AD admin configured yet. |
-| SQL Database (prod) | `shriyaminingdb` | General Purpose, Serverless, 0.5 vCore min, free offer, auto-pause after 60 min idle | **To do (cost):** lower the auto-pause delay to **15 minutes** (the smallest allowed): Portal → `shriyaminingdb` → Compute + storage → Auto-pause delay 0 h 15 min → Apply. Each idle stretch then costs a quarter of what it does now, which matters since the database pays as you go; the trade-off is a few seconds' "Waking up the database…" after 15 idle minutes. **When the monthly free allowance runs out: continue with charges** (pay as you go, since 2026-11-17; before, the database paused until the 1st with error 42119 and the app went down). Backup storage redundancy: **Zone-redundant** (since 2026-11-17; same price as locally-redundant, survives losing one datacenter in Central US; geo-redundant isn't offered on the free offer). |
+| SQL Database (prod) | `shriyaminingdb` | General Purpose, Serverless, 0.5 vCore min, free offer, auto-pause after 60 min idle | Auto-pause delay is managed by Azure on a free-offer database: the Portal shows no auto-pause setting to change (checked 2026-11-17), so it stays as Azure sets it. Data max size 32 GB = the free storage amount. Max vCores 2 / min 0.5: billing is per second for the larger of the minimum and what queries use (about 2% CPU), so lowering max vCores would save almost nothing. **When the monthly free allowance runs out: continue with charges** (pay as you go, since 2026-11-17; before, the database paused until the 1st with error 42119 and the app went down). Backup storage redundancy: **Zone-redundant** (since 2026-11-17; same price as locally-redundant, survives losing one datacenter in Central US; geo-redundant isn't offered on the free offer). |
 | SQL Database (test) | `shriyaminingdbtest` | Same tier as prod, free offer only | Pauses when its free allowance runs out (until the 1st): kept free on purpose, for budget. The CI test database (§6.1) covers building and testing the scripts meanwhile. |
 | Application Insights | `ShriyaMiningIndustries-api` | Standard | Shared telemetry sink for all four API-side deployments (prod/test × co-located/standalone). One place to watch live traffic for any of them — see §12. |
 | Azure AD App Registration | `ShriyaMiningIndustriesApi-github-actions` (App ID `32f692ff-e4ba-4492-a4cc-24375ea72d2a`) | — | Used for GitHub Actions OIDC login (`azure/login@v2`), no stored client secret. Has **two** federated credentials, one per branch — see §6. |
@@ -724,8 +724,17 @@ Verified live: reads (health, a review-link lookup) and writes through both plai
 log) and a procedure (error log) succeed. The administrator login is kept for **migrations
 only** (the pipeline's `SQL_CONNECTION_STRING` GitHub secret), which genuinely need to change tables.
 
+**Production migrations use no password (2026-11-17).** The SQL server has a Microsoft Entra admin
+(a named person's Entra account; "Microsoft Entra authentication only" stays **off**, or the app's
+SQL login would stop working). In `shriyaminingdb` the pipeline's Azure identity — the GitHub
+Actions OIDC app registration `ShriyaMiningIndustriesApi-github-actions` — is a user
+(`CREATE USER … FROM EXTERNAL PROVIDER`) in `db_owner`, and the `main` migrate step connects with
+`Authentication=Active Directory Default`, which uses the Azure CLI login from `azure/login`
+(`SQL_PASSWORDLESS_CONNECTION` in the workflow). The `SQL_CONNECTION_STRING` GitHub secret is then
+no longer used and is to be deleted.
+
 **Still holding the admin password** (a rotation/drift risk, flagged rather than ignored): the
-GitHub secrets `SQL_CONNECTION_STRING` and `SQL_CONNECTION_STRING_TEST` (needed for migrations),
+GitHub secret `SQL_CONNECTION_STRING_TEST` (Test migrations and the test-database health check),
 and, until `shriyaminingdbtest` is awake again (its free allowance resets on the 1st), the SWA
 **test** environment setting and the test standby Function App (`ShriyaMiningIndustries-api-test`).
 To switch those: create the same limited user in `shriyaminingdbtest` first, then change both
@@ -754,9 +763,12 @@ login is set up. These belong in the Key Vault plan below with the SQL password.
   `az keyvault secret show`, using the OIDC identity already set up for `azure/login` — no
   `SQL_CONNECTION_STRING*` GitHub secrets needed at all once this is done.
 - **Longer-term, the real gold standard:** move to Azure AD / Managed Identity authentication for
-  SQL entirely — no password anywhere, ever. Needs an Azure AD admin configured on the SQL server
-  (not set up yet) and a `CREATE USER ... FROM EXTERNAL PROVIDER` per identity that needs access.
-  Bigger lift, worth doing once the system is stable rather than alongside active feature work.
+  SQL entirely — no password anywhere, ever. The Entra admin is now set and the pipeline already
+  signs in this way (above). What's left is the live app: its API runs as the Static Web App's
+  built-in (managed) Functions, which can't use a managed identity, so passwordless for the app
+  means serving the API from a linked Function App, which needs the Static Web App **Standard plan
+  ($9/month**, Azure Retail Prices API, 2026-11-17). Not worth it today: the app's password belongs
+  to a limited user (read, write, run procedures) and lives only in the app settings.
 
 **Never put an actual secret value in this repo.** If you need to document *which* app setting or
 GitHub secret holds something, name it — never paste the value.
