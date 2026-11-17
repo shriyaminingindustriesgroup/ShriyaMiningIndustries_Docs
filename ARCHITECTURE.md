@@ -28,7 +28,7 @@ All three live under the **`shriyaminingindustriesgroup`** GitHub account.
 
 | Repo | GitHub location | Purpose | Branch strategy |
 |---|---|---|---|
-| `ShriyaMiningIndustries_api` | `shriyaminingindustriesgroup/ShriyaMiningIndustries_api` (**private**) | The backend: C# / .NET, Azure Functions isolated worker. Owns all business logic, data access, and the SQL Database Project (stored procedures). | `main` (prod), `test` (test env) |
+| `ShriyaMiningIndustries_api` | `shriyaminingindustriesgroup/ShriyaMiningIndustries_api` (**private**) | The backend: C# / .NET, Azure Functions isolated worker. Owns all business logic, data access, and the database scripts (`database/migrations`, applied by DbUp). | `main` (prod), `test` (test env) |
 | `ShriyaMiningIndustries_UI` | `shriyaminingindustriesgroup/ShriyaMiningIndustries_UI` | The frontend: Vue 3 + Vite + TypeScript. Deployed as an Azure Static Web App with the C# API's build bundled in as its co-located Functions backend (see §4). | `main` (prod), `test` (test env) |
 | `ShriyaMiningIndustries_Docs` | `shriyaminingindustriesgroup/ShriyaMiningIndustries_Docs` | This repo. Living architecture documentation, public so it can be published free via GitHub Pages. **Never put secrets, connection strings, or passwords in here** — reference *where* a value lives (a named GitHub secret, a named app setting), never the value itself. | `main` |
 
@@ -148,7 +148,7 @@ Triggers on push to `main` or `test`. Branch decides the environment end-to-end 
 ```mermaid
 flowchart LR
     Push["push to main or test"] --> Test["test job:\nrestore, build,\nunit tests"]
-    Test --> Migrate["migrate job:\nopen SQL firewall for runner IP →\nintegration test (always vs. TEST db) →\nDbUp schema migration (branch DB) →\nSQL Database Project publish — stored procs (branch DB) →\nclose firewall"]
+    Test --> Migrate["migrate job:\nopen SQL firewall for runner IP →\nintegration test (always vs. TEST db) →\nDbUp: new V### scripts once,\nevery R__ script (procs, views) again (branch DB) →\nclose firewall"]
     Migrate --> Deploy["deploy job:\npublish API →\nzip + GitHub Release (api-<sha> or api-test-<sha>) →\nazure/login (OIDC) →\ndeploy to branch's Function App →\nrepository_dispatch to UI repo"]
 ```
 
@@ -157,10 +157,9 @@ Key points worth knowing when debugging this pipeline:
 - **The integration test always runs against the test database**, regardless of branch. This was
   deliberately fixed (it used to run against prod on every single deploy) — a throwaway
   health-check test has no business holding a live connection to production.
-- **DbUp migrations and the SQL Database Project publish are branch-targeted**, not "both every
-  time." Before the Test/Prod split, every push republished stored procedures to *both* databases
-  unconditionally — that defeated the point of having an isolated test environment, so it's gated
-  by branch now.
+- **DbUp migrations are branch-targeted**, not "both every time." Before the Test/Prod split,
+  every push republished stored procedures to *both* databases unconditionally — that defeated the
+  point of having an isolated test environment, so it's gated by branch now.
 - **The SQL firewall rule name includes the GitHub run ID** (`github-actions-runner-<run_id>`) so
   concurrent runs across branches can't collide.
 - **GitHub Releases are tagged with a branch-specific prefix** (`api-<sha>` vs `api-test-<sha>`)
@@ -216,23 +215,28 @@ Key points worth knowing when debugging this pipeline:
 
 ## 7. Database
 
-### 7.1 Migration strategy — two separate mechanisms, deliberately
+### 7.1 Migration strategy — one owner: DbUp (2026-11-17)
 
-- **DbUp** (`database/migrations/*.sql`, run via `ShriyaMiningIndustries.Migrations`) owns
-  **tables and data** — the things a destructive rebuild could lose. Sequential, numbered
-  `V###__description.sql` files plus `R__*.sql` repeatable scripts, applied in order.
-  Idempotent/tracked by DbUp's own journal table.
-- **SQL Database Project** (`database/ShriyaMiningIndustries.Database/*.sqlproj`, built with
-  `Microsoft.Build.Sql`, published via `SqlPackage`) owns **stored procedures, views, and
-  functions** — pure code, safe to diff-and-replace on every deploy. Published with explicit
-  `/p:` flags excluding `Tables;Users;Logins;...` from the diff — a `.publish.xml` profile was
-  tried first and found to silently fail to apply these settings; don't reintroduce one without
-  re-verifying via `/Action:Script` first, the same way this was originally verified.
+**DbUp** (`database/migrations/*.sql`, run by `ShriyaMiningIndustries.Migrations`) owns every
+database object:
 
-**Known footgun:** the `ExcludeObjectTypes` value in the SqlPackage command must stay
-double-quoted as one shell token. An unquoted `;` is treated as a command separator by the shell,
-silently truncating the exclusion list down to just `Tables` — this was caught locally before it
-ever reached CI, but would be a nasty one to debug blind if it recurred.
+- **`V###__description.sql`** — tables, indexes, constraints and data changes. Each runs **once**
+  (DbUp's journal, `dbo.SchemaVersions`), in number order. Write them so they're safe on any of our
+  databases: check what exists first (`COL_LENGTH`, `sys.indexes`, …), because production was
+  created before these scripts existed (`seed-baseline`), and its system-made constraint names
+  differ from a database built from V001.
+- **`R__*.sql`** — every stored procedure and view, as `CREATE OR ALTER`. They run **on every
+  deploy** (`ScriptType.RunAlways`), after all `V###` scripts, so a changed procedure reaches the
+  database just by editing it there. Nothing in them may change data or assume it runs once.
+
+Until 2026-11-17 there were two owners. DbUp ran `R__` scripts only once (journaled by name), so
+procedure changes actually reached the databases through a second tool: a SQL Database Project
+(`database/ShriyaMiningIndustries.Database`) published with SqlPackage, holding a hand-copied
+duplicate of every procedure. Its table files had no keys or indexes, so publishing was safe only
+because of a long list of exclude flags (a `.publish.xml` attempt once nearly dropped and rebuilt 8
+live tables). The project, its pipeline steps and the SqlPackage tool were removed, after checking
+that the `R__` files held every procedure and view with identical text. Verified by building an
+empty database from V001–V029 + `R__` and running it again (only the `R__` files re-ran, cleanly).
 
 ### 7.2 Schema overview
 
@@ -453,14 +457,56 @@ ever reached CI, but would be a nasty one to debug blind if it recurred.
   `currency`. PO invoices carry no tax (the printed export invoice has no tax column); totals
   show Tax 0.00.
 
-### 7.3 Tooling note — SQL Database Project and Visual Studio 2026
+### 7.3 Database design rules (review of 2026-11-17, V029)
 
-The SQL Database Project uses the **SDK-style** project format (`Microsoft.Build.Sql`), which
-Visual Studio 2026 cannot render in Solution Explorer (confirmed against Microsoft's own docs:
-SDK-style SQL projects are currently VS-2022-preview-only). This is expected, not a broken
-project — use **VS Code's SQL Database Projects extension** to work on it instead. Converting to
-the legacy project format would fix the VS 2026 complaint but break the cross-platform Linux CI
-build; don't do that.
+A review of the real schema (built from the scripts) led to these rules and fixes:
+
+- **Locking belongs in the procedures that write**, never in a shared view. `app.vInvoiceDetails`
+  had `WITH(UPDLOCK,HOLDLOCK)`, so every invoice list and detail read took update locks and readers
+  blocked each other and saves. Removed; every writer that reads it (`usp_Invoice_SaveSnapshot`,
+  called by create/update/delete) already holds the invoice row's lock in its own transaction.
+- **An email is one user for ever.** `security.User.Email` is unique across all rows, so
+  `usp_User_Create` gives a deleted user their old row back (same `UserId`, only the roles given now)
+  instead of failing with "User already exists".
+- **Codes and numbers:** invoice number, vendor code and user email are unique across all rows
+  (never reused). Buyer code and name are unique among **active** buyers (`UX_Buyer_Code_Active`,
+  `UX_Buyer_Name_Active`), as `usp_Buyer_Save` always checked. V029 drops V001's table-wide buyer
+  code constraint, which blocked reusing a deactivated buyer's code with a raw error. `app.Buyer.IsDeleted`
+  means *deactivated*; a buyer is only really deleted when nothing uses it.
+- **Log retention** (`log.usp_Log_Purge`, called by the API at most hourly): payload log per its
+  setting (30 days), error log 90 days (Info/Warning codes) or 1 year, application events 90 days,
+  email log 1 year. Real deletes in small batches. The old `usp_ErrorLog_Purge` was never called and
+  only marked rows deleted; V029 drops it.
+- **Allowed-value checks** on status columns written from a fixed list in the code
+  (`InvoiceReviewRequest.Status`, `EmailLog.Status`, `EmailLog.Kind`), added only when existing rows
+  fit (otherwise V029 prints a warning). Deliberately **none** on statuses computed by a single
+  procedure (`POLine.Status`, `POStatus.Status`, from `sales.usp_POStatus_Recalculate`; the value set
+  is combinatorial, e.g. "In Transit - Partial") or on history columns (`InvoiceStatusChange`), which
+  must keep whatever was true then.
+- **Every foreign key column is indexed** (plain, not filtered: the database's own checks can only
+  use plain indexes). V029 added seven, e.g. `IX_Invoice_BuyerId`.
+- **No duplicate indexes:** V029 dropped the filtered non-unique indexes that repeated a unique one
+  (`IX_Invoice_InvoiceNumber`, `IX_Vendor_VendorCode`, `IX_User_Email`, `IX_Buyer_BuyerCode`).
+- **Same value, same type:** money `DECIMAL(19,2)` (V029 widened `InvoiceReviewDecision.InvoiceTotal`),
+  PO numbers `NVARCHAR(200)` (V029 widened `POImportBatch.PONumber`).
+
+Reviewed and **kept on purpose**:
+
+- **The invoice is stored as a document and as rows.** `app.Invoice.DocumentJson` is the invoice
+  as built (the source for Print/PDF/Excel); `InvoiceLine` rows, the header columns copied out of it
+  (container no, shipping reference, vessel) and `Invoice.PONumber` (the PO numbers as printed) are
+  derived from it, **only** by `usp_Invoice_Create`/`usp_Invoice_Update` in the same transaction,
+  for PO fulfilment maths and searching. Never write those columns anywhere else.
+- **Files in the database** (`PODocument.Content`, `LegacyInvoiceUpload.Content`, each emailed
+  PDF in `InvoiceReviewRequest.AttachmentContent`): they are records (what was received / sent) and
+  are small. They are the main source of growth; move them to Blob Storage only if the database size
+  becomes a problem (that adds a storage cost).
+- **Random GUID keys** (`NEWID()`) on invoices, lines and PO lines: they fragment large tables, but
+  at hundreds to thousands of rows it doesn't matter, and procedures create the ids themselves, so
+  changing it means rewriting the inserts. Revisit above ~100,000 rows.
+- **Email columns** are 255 or 320 characters: both hold any real address (the practical maximum is
+  254). `security.User.UserId` is a GUID stored as text, and `Invoice.InvoiceDate` is a date stored
+  with a time of midnight: changing either touches keys, snapshots and every caller for no gain.
 
 ---
 
@@ -674,9 +720,6 @@ folder (which has no `.csproj`, just publish output) and fails. If this warning 
 against the action's actual `action.yml` before assuming the input is invalid — the warning text
 can be misleading.
 
-**VS 2026 shows "Target framework not installed" for the SQL Database Project.** Expected, not a
-bug — see §7.3. Use VS Code's SQL Database Projects extension for that project instead of VS 2026.
-
 **A print/PDF export call fails even though Excel export on the same invoice works fine.** Print
 layout (`format=print`) is deliberately **not served by the API at all** — it's built entirely
 client-side (`buildLegacyPrintHtml` in `src/services/legacy-invoice.js`) from data already fetched.
@@ -732,12 +775,10 @@ as 500s. Fix: set the status once, in `CreateResponse(status)`, and never after 
 
 **`Msg 1934 … SET options have incorrect settings: 'QUOTED_IDENTIFIER'` on a PO upload.**
 `sales.POLine` and `sales.POImportRow` have filtered indexes, which need `QUOTED_IDENTIFIER ON`
-both when a procedure is *created* and when it runs. SqlClient, DbUp and SqlPackage all use ON,
+both when a procedure is *created* and when it runs. SqlClient and DbUp use ON,
 but `sqlcmd` defaults to OFF — so a procedure deployed by hand with `sqlcmd -i` (e.g. replaying
 `R__platform-procedures.sql` against a local database) fails on its first insert. Always pass
-`sqlcmd -I`. Also note DbUp journals `R__` scripts like versioned ones: changing
-`R__platform-procedures.sql` doesn't re-run it on an existing database — the SQL Database Project
-publish is what deploys changed procedures there.
+`sqlcmd -I`, or simply run the migrator (`apply`), which re-runs every `R__` script (§7.1).
 
 ---
 
@@ -933,9 +974,9 @@ This is the case that needs more care, because DbUp migrations (§7.1) are forwa
 - **A migration is fine, but the feature built on top of it is broken**: this is just a normal
   code revert (§16.2) — the schema change can stay, only the application code needs to roll back.
 
-The SQL Database Project (stored procedures, §7.1) is safer to revert — it's a diff-and-replace
-publish, not a one-way migration, so reverting the C# source and redeploying naturally republishes
-the previous version of any changed stored procedure.
+Stored procedures and views (`R__*.sql`, §7.1) are safer to revert — DbUp re-runs those files
+(`CREATE OR ALTER`) on every deploy, so reverting the commit and redeploying puts the previous
+version of any changed procedure back.
 
 ### 16.4 If the deploy itself is the problem (not the code)
 

@@ -201,7 +201,7 @@
   GitHub account:</p>
   <table>
     <tr><th>Repo</th><th>Purpose</th><th>Branches</th></tr>
-    <tr><td><code>ShriyaMiningIndustries_api</code></td><td>C# backend — business logic, data access, SQL Database Project</td><td><code>main</code> (prod), <code>test</code></td></tr>
+    <tr><td><code>ShriyaMiningIndustries_api</code></td><td>C# backend — business logic, data access, database scripts (DbUp)</td><td><code>main</code> (prod), <code>test</code></td></tr>
     <tr><td><code>ShriyaMiningIndustries_UI</code></td><td>Vue 3 frontend, deployed as an Azure Static Web App</td><td><code>main</code> (prod), <code>test</code></td></tr>
     <tr><td><code>ShriyaMiningIndustries_Docs</code></td><td>This site + its Markdown source</td><td><code>main</code></td></tr>
   </table>
@@ -300,11 +300,17 @@ flowchart LR
 
 <section id="database">
   <h2>Database</h2>
-  <p><strong>Two mechanisms, deliberately separate:</strong> DbUp owns tables and data
-  (<code>database/migrations/*.sql</code>); a SQL Database Project owns stored procedures/views
-  (published via SqlPackage, excluding tables/data from the diff). Schema: a <code>security</code>
-  schema (User/Role/Permission, role-based) and an <code>app</code> schema (Vendor/Buyer/Invoice
-  and related master data).</p>
+  <p><strong>One owner, DbUp</strong> (<code>database/migrations</code>, since 17 Nov 2026):
+  <code>V###</code> scripts change tables and data and run once; <code>R__</code> scripts hold every
+  stored procedure and view and run on every deploy. (A second tool, a SQL Database Project
+  published with SqlPackage, used to deploy a hand-copied set of procedures; it was removed.)
+  Schema: a <code>security</code> schema (User/Role/Permission, role-based), an <code>app</code>
+  schema (Vendor/Buyer/Invoice and related data), <code>sales</code> (POs) and <code>log</code>.</p>
+  <p><strong>Design review (V029, 17 Nov):</strong> the invoice view no longer locks on every read;
+  a deleted user can be added back; a deactivated buyer's code can be reused; all log tables are
+  purged hourly (payload 30 days, errors 90 days/1 year, events 90 days, email log 1 year); status
+  checks on the email tables; an index on every foreign key; duplicate indexes removed. The rules
+  are in ARCHITECTURE.md §7.3.</p>
   <p><strong>Tracking → Product</strong> groups PO lines on the SKU <em>without its delivery prefix</em>
   (<code>BED-GRNABSBLK1224FL</code> and <code>GRNABSBLK1224FL</code> are one product, with a chip per
   delivery place). The prefixes are the <code>itemStartsWith</code> values of the buyer's delivery rules,
@@ -412,8 +418,7 @@ flowchart LR
     repo's ability to download its releases until a dedicated read-only PAT was added.
   </div>
 
-  <p class="dim">Full playbook, including the SQL Database Project tooling notes and the VS 2026
-  compatibility note, in <a href="https://github.com/shriyaminingindustriesgroup/ShriyaMiningIndustries_Docs/blob/main/ARCHITECTURE.md#12-debugging-playbook--things-that-have-actually-gone-wrong">ARCHITECTURE.md §12</a>.</p>
+  <p class="dim">Full playbook in <a href="https://github.com/shriyaminingindustriesgroup/ShriyaMiningIndustries_Docs/blob/main/ARCHITECTURE.md#12-debugging-playbook--things-that-have-actually-gone-wrong">ARCHITECTURE.md §12</a>.</p>
 </section>
 
 <section id="local-dev">
