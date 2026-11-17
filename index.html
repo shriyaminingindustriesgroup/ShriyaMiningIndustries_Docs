@@ -359,7 +359,9 @@ flowchart LR
 
   <div class="gotcha">
     <strong>"degraded" health / Error 40613 against SQL.</strong> Serverless auto-pause after 60
-    min idle. First request wakes it up and reports degraded; just retry.
+    min idle (that's what keeps it free; no keep-alive pings). The app handles the wake-up itself:
+    the API waits up to 30 s while opening the connection, then answers 503 <code>DB-WAKING-503</code>;
+    the UI shows "Waking up the database…" and retries for up to 90 s. See ARCHITECTURE.md §12.
   </div>
   <div class="gotcha">
     <strong>A route 404s with no app error envelope.</strong> Azure Functions reserves the literal

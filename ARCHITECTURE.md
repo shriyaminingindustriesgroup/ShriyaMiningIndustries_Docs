@@ -589,10 +589,33 @@ is non-obvious each time.
 
 **"degraded" health status / `Error Number:40613` / connection timeouts against SQL.**
 Azure SQL Serverless auto-pauses after 60 minutes idle (`autoPauseDelay: 60`, both databases).
-The *first* request after a pause wakes it up but reports degraded/fails; the database is usually
-ready within 10–30 seconds. Standard fix: just retry (`gh run rerun <id> --failed` in CI, or
-simply re-request in the app). This is not a bug, it recurs regularly, and it's expected —
-don't spend time investigating it as if it were new each time.
+The *first* request after a pause wakes it up; the database is usually ready within 10–30 seconds
+(up to about a minute). This is not a bug, it recurs regularly, and it's expected — don't spend
+time investigating it as if it were new each time. In CI: `gh run rerun <id> --failed`.
+
+**The app handles it itself (since 2026-11-16), at no cost.** Pausing is what keeps the database
+free, so there is deliberately **no keep-alive ping or timer**: the database sleeps whenever nobody
+uses the app (nights, weekends). Instead:
+1. **API waits.** `DbConnectionFactory` (`DatabaseWake`) retries **only opening the connection**
+   while it fails with a "still starting" error (40613, 40197, 40501, 49918–49920, 4060,
+   10928/10929, connection drops, timeouts), pausing 1, 2, 3, then 4 s, for up to **30 s** (inside
+   Static Web Apps' ~45 s gateway limit; each try is cut off at the budget). Opening is the only safe
+   thing to retry: if the connection never opened, nothing reached the database, so nothing can be
+   saved twice. Queries and saves are never retried.
+2. **Still not up → 503 `DB-WAKING-503`** with `Retry-After: 5` ("The database is starting up…").
+   `ErrorHandlingMiddleware` writes **no** error-log row for it and the payload log skips it (not a
+   fault; the database can't take the row anyway). `UserRoleLookupRepository` lets it through rather
+   than turning it into a 500. The error and payload log writers open with
+   `CreateOpenConnectionNoWaitAsync` (one try), so logging never adds a 30 s wait.
+3. **UI retries.** The API client (`database-wake.ts`) sends the same request again after
+   `Retry-After`, for up to **90 s** from the first 503, saves included (same reason as above), while
+   the layout shows **"Waking up the database… this usually takes under a minute."** (on the first
+   load screen, or as a strip over the page). The buyer's `/review` page does the same with its
+   own `fetch`. Only after 90 s does the user see an error.
+The app's first call, `/api/me` (roles), is what wakes the database when someone opens it.
+Verified locally by making the database unreachable: 12 s away → the call waited and answered
+200; 45 s away → 503 with `Retry-After` at 30 s, no error/payload rows; in the browser the page
+said "Waking up the database…" and loaded by itself when the database came back.
 
 **Azure Functions silently 404s a route containing the literal segment `admin`.** The Functions
 host reserves `/admin/*` for its own internal Admin API, independent of any `api/` prefix your app
