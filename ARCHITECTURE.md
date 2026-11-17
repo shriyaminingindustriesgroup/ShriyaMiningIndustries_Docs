@@ -626,6 +626,26 @@ inside its caller's).
 - **A PO line and a PO import always have a buyer:** `CK_POLine_BuyerId_Required`,
   `CK_POImportBatch_BuyerId_Required` (a check, so the indexes on `BuyerId` stay; production had no
   row without one).
+
+**Low — fixed (no migration; procedures and views only):**
+- **No `SELECT *` in objects other code depends on:** `app.vInvoiceDetails` lists its 33 columns
+  (the same, in the same order, so saved invoice versions keep their shape) and
+  `sales.usp_PurchaseOrder_GetHeaders` its six. A new invoice column is added to the view on purpose.
+- **`security.usp_Role_Save` / `usp_Role_Delete` follow the standard pattern** (TRY/CATCH around one
+  transaction), and their checks moved inside it with locks: a user given a role between the "nobody
+  has it" check and the delete used to lose it silently, and two people saving the same new role name
+  could get a raw duplicate-key error.
+
+**Decided, no change:**
+- `log.ApplicationEvent` is empty (only the removed procedures wrote to it). Kept for the planned
+  admin audit log ("who changed what"), rather than dropped and recreated.
+- Watch only: list-screen text search (`CHARINDEX`, `LIKE '%…'`) scans the table — fine at today's
+  size, full-text search above ~50,000 invoices; `POStatus.BuyerKey` vs `BuyerId` and `UpdatedOn` vs
+  `ModifiedOn` are renamed only when that code changes; child and cache tables (`InvoiceReviewRecipient`,
+  `InvoiceSnapshot`, `POStatus`, `AppSetting`) carry their dates through their parent or update time.
+- Read-committed snapshot (readers never wait for writers): to be confirmed on production
+  (`SELECT is_read_committed_snapshot_on FROM sys.databases WHERE name = DB_NAME()`); Azure SQL
+  turns it on by default.
 ---
 
 ## 8. Authentication & authorization
