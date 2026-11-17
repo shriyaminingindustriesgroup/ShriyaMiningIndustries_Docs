@@ -593,6 +593,26 @@ functions never hold SQL. On top of that:
 - `IInvoiceReviewRepository` keeps the sendings (requests, recipients, links, decisions); the email
   template and each buyer's code choice moved to `IReviewSetupRepository`.
 
+
+### 7.5 Database objects review (2026-11-17): standards and fixes
+
+Reviewed: 37 tables, 58 stored procedures, 2 views; no functions or triggers (by design: no
+hidden logic in triggers, no row-by-row scalar functions). Standards every procedure meets:
+`SET NOCOUNT ON`; any transaction has `SET XACT_ABORT ON` and rolls back on error; refusals are
+`THROW 50400/50404/50409` with a message for the user; no `NOLOCK`, no dynamic SQL, no cursors;
+writes that must agree run in one transaction (`sales.usp_POStatus_Recalculate` always runs
+inside its caller's).
+
+**High — fixed (V031):**
+- `R__error-handling.sql` held an **old copy of `app.usp_Invoice_Create`** without the PO quantity,
+  price and buyer checks. The copy in `R__platform-procedures.sql` overwrote it on every deploy (it
+  runs later), so it was harmless only by file order. Removed, with two unused invoice procedures.
+- **Procedures nothing called** — `app.usp_Invoice_UpdateStatus`, `app.usp_Invoice_GetVersionHistory`,
+  `sales.usp_POImport_Create` (would also have cut PO numbers to 50 characters),
+  `security.usp_User_AssignRole` — removed from the scripts and dropped by V031. (A database test
+  that used `usp_Invoice_UpdateStatus` now goes through `usp_Invoice_Update`, as the app does.)
+- `log.usp_ErrorLog_Insert`: `@ErrorCode` 20 → 25 characters, as the column. Its `PRINT` stood
+  above the `GO`, which made it part of the procedure (every logged error printed it); moved below.
 ---
 
 ## 8. Authentication & authorization
