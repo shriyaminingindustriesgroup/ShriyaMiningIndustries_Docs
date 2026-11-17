@@ -122,18 +122,27 @@ one Azure subscription.
 | Storage account | `stshriyaminingapi` | Standard_LRS | Backs the prod Function App's internal state. |
 | Storage account | `stshriyaminingapitest` | Standard_LRS | Backs the test Function App's internal state. |
 | SQL Server | `shriyaminingindustries` (`shriyaminingindustries.database.windows.net`) | Logical server | SQL-auth admin login configured (ask a team member for the username/password — neither is written down here; this repo is public). No Azure AD admin configured yet. |
-| SQL Database (prod) | `shriyaminingdb` | General Purpose, Serverless, 0.5 vCore min, free-limit enabled, auto-pause after 60 min idle | |
-| SQL Database (test) | `shriyaminingdbtest` | Same tier/config as prod | |
+| SQL Database (prod) | `shriyaminingdb` | General Purpose, Serverless, 0.5 vCore min, free offer, auto-pause after 60 min idle | **When the monthly free allowance runs out: continue with charges** (pay as you go, since 2026-11-17; before, the database paused until the 1st with error 42119 and the app went down). Backup storage redundancy: **Zone-redundant** (since 2026-11-17; same price as locally-redundant, survives losing one datacenter in Central US; geo-redundant isn't offered on the free offer). |
+| SQL Database (test) | `shriyaminingdbtest` | Same tier as prod, free offer only | Pauses when its free allowance runs out (until the 1st): kept free on purpose, for budget. The CI test database (§6.1) covers building and testing the scripts meanwhile. |
 | Application Insights | `ShriyaMiningIndustries-api` | Standard | Shared telemetry sink for all four API-side deployments (prod/test × co-located/standalone). One place to watch live traffic for any of them — see §12. |
 | Azure AD App Registration | `ShriyaMiningIndustriesApi-github-actions` (App ID `32f692ff-e4ba-4492-a4cc-24375ea72d2a`) | — | Used for GitHub Actions OIDC login (`azure/login@v2`), no stored client secret. Has **two** federated credentials, one per branch — see §6. |
-| Action Group | `ShriyaMiningAlerts` | Email | Notifies on the two alert rules below. |
+| Action Group | `ShriyaMiningAlerts` | Email (verified) | Notifies on the three alert rules below. |
 | Metric alert | `ShriyaMining-ExceptionSpike` | Severity 2 | Fires when `exceptions/count` on the shared Application Insights instance exceeds 5 in a 15-minute window — catches a real error spike in any of the four API deployments. |
 | Metric alert | `ShriyaMining-FailedRequests` | Severity 2 | Same trigger pattern, on `requests/failed`. Neither alert fires on the known SQL cold-start flake (§12) — that reports a 200 with `"status":"degraded"` in the body, not an exception or a failed request. |
 
-Both alert rules were added specifically to close a real gap: before they existed, Application
-Insights was collecting telemetry nobody would be notified about — an outage or error spike would
-only be noticed if someone happened to be looking. Within Azure Monitor's free allowance (10
-monitored metric time series/month, confirmed against current pricing guidance) — this adds two.
+| Metric alert | `ShriyaMining-EmailSendFailed` | Severity 2 | Fires when the custom metric `email_send_all_failed` (an invoice email that reached no To recipient) totals more than 0 in 15 minutes (checked every 5). Independent of the mail provider, so it still works when Zoho is down. The API reports a 0 for it at every start (`ReportEmailMetricOnStart`): Azure only lists a custom metric for alert rules after it has received a value. |
+| Budget | `ShriyaMining-Monthly` | $20 / month, subscription | Emails at 50% and 80% of actual cost and at 100% forecast. Added when the production database moved to pay as you go (2026-11-17). Free. |
+
+The first two alert rules were added specifically to close a real gap: before they existed,
+Application Insights was collecting telemetry nobody would be notified about — an outage or error
+spike would only be noticed if someone happened to be looking. All three are within Azure Monitor's
+free allowance (the first 10 monitored metric time series a month are free, then $0.10 each;
+log-search alerts would cost $0.50/month each at 15-minute frequency — Azure Retail Prices API,
+2026-11-17). Budgets and alert emails (up to 1,000 a month) are free.
+
+Inside the app, the **Email Alerts** service (Company profile → Services, `EMAIL_ALERTS`) emails
+its To address when an invoice email reaches nobody; it sends through Zoho, which is why the Azure
+alert above exists as well.
 
 ---
 
