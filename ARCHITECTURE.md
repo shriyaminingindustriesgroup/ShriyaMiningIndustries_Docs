@@ -338,6 +338,19 @@ ever reached CI, but would be a nasty one to debug blind if it recurred.
   before go-live": one Delivered old invoice numbered `GL-<PO#>` for everything still open). V018 also
   widens `app.Buyer.Phone` to 40 characters (buyers in any country), and the buyer code can now change
   at any time (it's only a label; POs and invoices use `BuyerId`).
+- **Photos in the email to the buyer (V027, 2026-11-16).** The Save and send email popup has
+  **Add photos** (the computer's file picker, several at once; thumbnails with remove). The browser
+  shrinks each photo (`email-photos.ts`: long side ≤ 1600 px, JPEG quality 0.8; a 12 MB photo became
+  ~600 KB in testing); types the browser can't open (e.g. iPhone HEIC in Chrome/Edge) are refused with a
+  message to save them as JPEG. **Limits: at most 10 photos, and the invoice PDF plus photos at most
+  3 MB per email** (the user's choice, which is also Microsoft Graph's simple-send limit, so it stays
+  valid after the move to Microsoft 365). The popup shows the running total and blocks sending over it;
+  the API checks again (`EmailPhotos`: count, JPEG/PNG by the file's first bytes, clean distinct names,
+  the 3 MB total) before anything is sent. Everyone on the email (To, CC, BCC, the service mailbox) gets
+  the PDF and the photos; acknowledgement emails don't. **The photos aren't stored** (no database
+  growth): `app.InvoiceReviewRequest.PhotosJson` keeps only `{ name, bytes, sha256 }` per photo, listed
+  as "Photos sent" on the Buyer approval card; the buyer's review page is unchanged. In the payload log
+  the photos' `contentBase64` becomes a size + SHA-256 summary.
 - **Payload log (V026, 2026-11-16).** `log.PayloadLog` stores API calls with their request and
   response so a failure can be read exactly as it happened. `PayloadLoggingMiddleware` is registered
   **first** (outside `ErrorHandlingMiddleware`), so it records the final answer, error envelopes

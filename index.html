@@ -316,6 +316,10 @@ flowchart LR
   through one sender interface: Zoho Mail over SMTP today, Microsoft 365 (Graph) later by changing the
   <code>EMAIL_PROVIDER</code> app setting. Mailbox passwords are app settings only. See ARCHITECTURE.md
   §7.2 and §11.</p>
+  <p><strong>Photos in the email (V027):</strong> the Save and send email popup can attach photos from
+  the computer. The browser shrinks them (about 1600 px, JPEG); at most 10 photos and 3 MB per email,
+  invoice PDF included (also the Microsoft 365 limit). The photos go to everyone on the email but aren't
+  stored: only their names, sizes and fingerprints are listed on the Buyer approval card.</p>
   <p><strong>Payload log (V026):</strong> API calls that fail (status 400 and above) are stored with
   their request and response for 30 days, then deleted by the API itself (at most hourly, in small
   batches; Static Web Apps has no timers). Successful calls can be logged too, but that switch is off.
