@@ -569,8 +569,22 @@ functions never hold SQL. On top of that:
 - **Short forms.** `Shared.Data/Db` (`ProcAsync`, `QueryAsync`, `ExecuteAsync`, …) replaces the
   open-connection / command / Dapper lines; used in new and changed repository code
   (`ReviewSetupRepository`, `AppSettingsRepository`), and existing methods move over when they're
-  next changed. `Shared.Data`'s three writers (role lookup on every request, error and payload log)
-  keep plain ADO.NET on purpose: they're on the hot or failure path.
+  next changed. A bulk move was measured and declined (2026-11-17): 55 of 101 repository methods are
+  simple one-call methods (about 2 lines each to gain); the other 46 (transactions, several result
+  sets, built parameters) would stay as they are anyway, so it wasn't worth rewriting working code.
+  `Shared.Data`'s three writers (role lookup on every request, error and payload log) keep plain
+  ADO.NET on purpose: they're on the hot or failure path.
+- **Messages people see.** Every 400/403 says what's wrong: `ValidationException` shows its
+  reason (it used to be hidden behind "Invalid input provided", copied from the old Node API), and a
+  missing permission or role reads "You do not have permission to do this (needs the invoice.status
+  permission)" (`ForbiddenException.ForPermission` / `ForRole`; it used to be a doubled sentence).
+  Responses that carry two names for one value (`id`/`invoiceId`, `items`/`lineItems`, …, from the
+  Node API) keep them because the UI reads both; **no new endpoint adds duplicates**, and an old one
+  is removed only together with the UI change for that screen.
+- **Big services are split by job, into files** (`partial`): `InvoiceService` → `.Queries`,
+  `.Status`, `.Edits`; `PoImportService` → `.Fulfillment`, `.Spreadsheets`; the constructor and
+  shared helpers stay in the main file. Same class, so callers, DI and tests are unchanged; a real
+  split into separate classes only when one part needs different dependencies.
 - **Tested against real SQL.** `ShriyaMiningIndustries.Repositories.Tests` runs every repository
   against a database built from the scripts (in CI on every push, §6.1; locally set
   `SQL_CONNECTION_STRING` to a database built with the migrator). Its first run found a real bug:
