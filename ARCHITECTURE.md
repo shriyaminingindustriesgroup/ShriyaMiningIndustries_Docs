@@ -351,7 +351,7 @@ ever reached CI, but would be a nasty one to debug blind if it recurred.
   growth): `app.InvoiceReviewRequest.PhotosJson` keeps only `{ name, bytes, sha256 }` per photo, listed
   as "Photos sent" on the Buyer approval card; the buyer's review page is unchanged. In the payload log
   the photos' `contentBase64` becomes a size + SHA-256 summary.
-- **Black and white email and invoice; the sender's name (2026-11-17, no migration).** Agreed so the
+- **Black and white email and invoice; the From name (V028, 2026-11-17).** Agreed so the
   documents print well on black-and-white printers.
   - *Email* (`EmailContent.Compose`): laid out like an ordinary business email. The message, the
     invoice details as a plain table with grey rules, a black **Review and approve invoice** button
@@ -363,13 +363,13 @@ ever reached CI, but would be a nasty one to debug blind if it recurred.
   - *Invoice / packing list* (`legacy-invoice.js`, workbook palette): black text, light grey heading
     fills, mid-grey borders; no brown, gold or green. Excel, Preview, Print and the emailed PDF all come
     from this one workbook layout, so all four match.
-  - *Sender's name*: `{senderName}` is `IUserContext.Name`. The sign-in gives only the email, so
-    `AuthenticationMiddleware` now takes `security.User.DisplayName` from the role lookup query when it
-    is a real name (not blank, no "@"). Admin → Users gets a **Name** column (Add name / Edit) and a
-    Name field on Add user: `PUT /api/console/users/{id}/name` → `security.usp_User_SetName` (empty
-    puts the email back; the column is NOT NULL). Until a name is set the popup says the message is
-    signed with the email address (`ApprovalEmailDraftDto.SenderNameMissing`). Buyer contact names
-    (Admin → Buyers → Invoice emails) aren't used in the email yet.
+  - *From name* (V028: `app.OrganizationService.FromName NVARCHAR(100) NULL`): set on Company
+    profile → Services next to the From email (e.g. "Sandeep Namburi"). `{senderName}` is the Invoice
+    Email Service's From name, whoever is signed in; until it's set, the sign-in (usually an email
+    address), and the popup says so (`ApprovalEmailDraftDto.SenderNameMissing`). Checked on save:
+    spaces tidied, at most 100 characters, no "@". Names are kept for the From only, not for CC (the
+    user's choice). A first version the same day put a Name on Admin → Users instead
+    (`security.usp_User_SetName`); it was replaced before use, and V028 drops that procedure.
 - **Payload log (V026, 2026-11-16).** `log.PayloadLog` stores API calls with their request and
   response so a failure can be read exactly as it happened. `PayloadLoggingMiddleware` is registered
   **first** (outside `ErrorHandlingMiddleware`), so it records the final answer, error envelopes
