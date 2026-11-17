@@ -613,6 +613,19 @@ inside its caller's).
   that used `usp_Invoice_UpdateStatus` now goes through `usp_Invoice_Update`, as the app does.)
 - `log.usp_ErrorLog_Insert`: `@ErrorCode` 20 → 25 characters, as the column. Its `PRINT` stood
   above the `GO`, which made it part of the procedure (every logged error printed it); moved below.
+
+**Medium — fixed (V032):**
+- **Standard constraint names.** 102 constraints had names SQL Server made up
+  (`DF__Invoice__Statu__3B75D760`), different in every database, so scripts had to look them up.
+  All renamed to one pattern worked out from table and column — `PK_<Table>`,
+  `UQ_<Table>_<Columns>`, `DF_<Table>_<Column>`, `CK_<Table>_<Column>`, `FK_<Table>_<Referenced>` —
+  so production, Test and a fresh database now have the same names. **New constraints are always
+  named this way in the script that creates them.**
+- **One UTC function:** every default and procedure uses `SYSUTCDATETIME()` (the 24 `GETUTCDATE()`
+  defaults, 3 ms precision, were recreated; two procedures changed).
+- **A PO line and a PO import always have a buyer:** `CK_POLine_BuyerId_Required`,
+  `CK_POImportBatch_BuyerId_Required` (a check, so the indexes on `BuyerId` stay; production had no
+  row without one).
 ---
 
 ## 8. Authentication & authorization
