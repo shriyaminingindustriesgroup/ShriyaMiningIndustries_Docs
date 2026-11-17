@@ -338,6 +338,32 @@ ever reached CI, but would be a nasty one to debug blind if it recurred.
   before go-live": one Delivered old invoice numbered `GL-<PO#>` for everything still open). V018 also
   widens `app.Buyer.Phone` to 40 characters (buyers in any country), and the buyer code can now change
   at any time (it's only a label; POs and invoices use `BuyerId`).
+- **Emailing invoices to buyers for approval (V025, 2026-11-16; part 2).** On a Draft/Rejected
+  invoice, choosing In Review turns **Save** into **Save and send email**: the edits are saved
+  (status kept), the browser builds the **PDF** from the Preview/Print layout (`invoice-pdf.ts`:
+  html2canvas + jsPDF, pages cut only between items), and a popup shows the email (To/CC/BCC from the
+  buyer's list, the service mailbox locked in CC, subject and a formatted message). **Confirm and send**
+  (`POST /api/invoices/{id}/submit-for-approval`, `invoice.send` + `invoice.status`) runs the In Review
+  checks first (`InvoiceService.PrecheckReviewAsync`), sends **one email per To person with their own
+  link** (delivered only to them) and **one copy without links** for CC/BCC/the service mailbox, and
+  **only if a To address was accepted** moves the invoice to In Review; some failed → the sender is
+  emailed; all failed → nothing changes, the Email Alerts service's To are emailed and the
+  `email_send_all_failed` metric is counted. Admin only: "Don't email the buyer". Tables:
+  `app.InvoiceReviewRequest` (subject, message, the PDF, the invoice RowVersion it was sent for, state),
+  `app.InvoiceReviewRecipient` (only the **SHA-256 of each link token**; send result; opens; one-time
+  code hash, tries, lock-out), `app.InvoiceReviewDecision` (once per sending: unique index),
+  `app.EmailTemplate` (default subject/message), `app.AppSetting` (link days 14, code required 0),
+  `app.Buyer.RequireReviewCode` (per-buyer exception). **The buyer's page** is `/review#t=<token>`
+  (outside the app frame and sign-in; the token stays in the `#` part, sent in the `X-Review-Token`
+  header to the anonymous routes `GET /api/public/invoice-review`, `.../attachment`, `POST .../code`,
+  `POST .../decision`). A link works only while its sending is Open, unexpired, undecided and the
+  invoice is **In Review with the same RowVersion** it was sent for: any change to the invoice makes it
+  stale ("changed"), a newer email replaces it ("replaced"). `app.usp_InvoiceReview_Decide` re-checks
+  all of that under lock, records the decision (email from the token row, typed name, IP from
+  `X-Forwarded-For`, browser), saves the buyer's shipping reference (the old one named), and moves the
+  status through `usp_Invoice_Update` with `Source='Buyer email'`; everyone on the email then gets an
+  acknowledgement (no links). Messages are cleaned server-side (HtmlSanitizer, allow-list). Company
+  profile → **Email settings** edits the template, link days and the code switch.
 - **Email: Services and buyers' invoice email lists (V024, 2026-11-16; part 1 of emailing invoices
   to buyers for approval, plan in `plan/email-functionality` outside the repos).**
   `app.OrganizationService` is **Admin → Company profile → Services**: one row per service the system
@@ -446,8 +472,10 @@ build; don't do that.
    **Status sync (ticket 382840, V013):** invoice statuses are Draft → In Review → Approved or
    **Rejected** (remarks required; editable again, then back to In Review) → Approved → **Final
    Information Pending** → **In Transit** → **Delivered** (formerly Shipped). Manager takes the next
-   step only; Admin any status to any status. **Approved and later need the container no. and shipping
-   reference** (Shipping details card on the invoice page, or the review page's header fields). PO line
+   step only; Admin any status to any status. **Approved needs the shipping reference (shipment
+   number); from Ready to Ship on, the container no. too** (changed 2026-11-16, V025: there's no
+   container no. yet when a buyer approves by email; Shipping details card on the invoice page, or
+   the review page's header fields). PO line
    and PO statuses are **stored** (`sales.POLine.Status`, `sales.POStatus`) and recalculated by
    `sales.usp_POStatus_Recalculate` in the same transaction as every invoice create/update/delete, PO
    confirm and spreadsheet upload. Line: least advanced of its invoices (Invoiced, In Review, Approved,

@@ -316,6 +316,13 @@ flowchart LR
   through one sender interface: Zoho Mail over SMTP today, Microsoft 365 (Graph) later by changing the
   <code>EMAIL_PROVIDER</code> app setting. Mailbox passwords are app settings only. See ARCHITECTURE.md
   §7.2 and §11.</p>
+  <p><strong>Emailing invoices for approval (V025):</strong> choosing In Review turns Save into
+  <strong>Save and send email</strong>: a PDF of the invoice is built in the browser and emailed, each To
+  person with their own link (only a hash of it is stored), CC/BCC a copy without links; the invoice moves
+  to In Review only once a To address got it. The buyer's page <code>/review</code> needs no login: approve
+  (shipping reference) or reject (remarks), once, while the invoice is unchanged since it was sent; the
+  decision moves the status through the normal rules, recorded as "Buyer email". Approved now needs only
+  the shipment number; the container no. is needed from Ready to Ship. See ARCHITECTURE.md §7.2, §8.</p>
 </section>
 
 <section id="auth">
