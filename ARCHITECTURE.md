@@ -554,6 +554,13 @@ functions never hold SQL. On top of that:
 - **No database call per item in a loop.** Read everything the loop needs first (e.g. old-invoice
   import reads all PO lines and taken invoice numbers once, not per file). Bounded loops of a few
   calls (the ≤ 10 recipients of an invoice email) are fine.
+- **No SQL built from values.** Values always go in as parameters (`@Id`); the only text ever
+  inserted into SQL is a `private const string` (a fixed column list or WHERE clause). A procedure
+  is not safer than parameterised SQL in a repository — both are immune to injection — so moving
+  queries into procedures is never needed for security. `SqlInjectionGuardTests` scans the API
+  source on every push and fails on an interpolated or `+`-joined SQL string with a non-const value,
+  on `CommandText` from a variable, and on dynamic SQL (`EXEC(@sql)`, `sp_executesql`) in the `R__`
+  scripts. The app connects as a limited database user (§11).
 - **One owner per table.** `app.AppSetting` is only read and written through `IAppSettings`
   (`Shared.Data/AppSettingsRepository`), whatever the module. The exception is `PayloadLogWriter`'s
   own read of its three settings, on the failure path, which must not wait for a sleeping database.
@@ -691,10 +698,30 @@ thing that would eventually need watching.
 
 ## 11. Secrets and credentials — current state and the plan
 
-**Today:** the SQL admin password is duplicated across several places — two GitHub secrets per
-repo-that-needs-it (`SQL_CONNECTION_STRING`, `SQL_CONNECTION_STRING_TEST`), the SWA's production
-and test environment app settings, and both standalone Function Apps' app settings. This is a
-real rotation/drift risk, flagged explicitly rather than ignored.
+**The live app no longer connects as the SQL administrator (2026-11-17, production).** It uses
+its own contained database user in `shriyaminingdb` (`CREATE USER … WITH PASSWORD`, no server
+login) with only `db_datareader`, `db_datawriter` and `EXECUTE`: it can read and write rows and run
+the stored procedures (everything the API does — checked: no table changes, permissions, DBCC or
+dynamic SQL at run time), but it can't create, change or drop tables, grant permissions or create
+logins. The SWA production setting `ConnectionStrings__ShriyaMiningIndustriesDb` holds that user,
+and so does the production standby Function App's (`ShriyaMiningIndustries-api`, same setting name,
+App settings tab; both checked healthy).
+Verified live: reads (health, a review-link lookup) and writes through both plain SQL (payload
+log) and a procedure (error log) succeed. The administrator login is kept for **migrations
+only** (the pipeline's `SQL_CONNECTION_STRING` GitHub secret), which genuinely need to change tables.
+
+**Still holding the admin password** (a rotation/drift risk, flagged rather than ignored): the
+GitHub secrets `SQL_CONNECTION_STRING` and `SQL_CONNECTION_STRING_TEST` (needed for migrations),
+and, until `shriyaminingdbtest` is awake again (its free allowance resets on the 1st), the SWA
+**test** environment setting and the test standby Function App (`ShriyaMiningIndustries-api-test`).
+To switch those: create the same limited user in `shriyaminingdbtest` first, then change both
+settings to it, with **that user's** password (not the administrator's). Changing the administrator
+password afterwards (then updating the two GitHub secrets) is optional hardening, not yet done.
+
+**SQL injection:** every value reaches SQL as a parameter, procedures build no SQL at run time,
+and `SqlInjectionGuardTests` (Api.Tests, every push) fails the build if SQL text is ever built from
+anything but a `const string` (§7.4). The limited app user means a mistake that slipped past both
+still couldn't drop or alter anything.
 
 **Email (V024, 2026-11-16):** the email settings live only in the app settings of each SWA
 environment (and the standby Function Apps), never in a repo: `EMAIL_PROVIDER` (`Smtp` / `Graph`),
