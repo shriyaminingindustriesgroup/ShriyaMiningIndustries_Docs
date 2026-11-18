@@ -669,17 +669,33 @@ applying. `app.usp_Buyer_Save` now moves the rules to the new code in the same t
 **Low — fixed (`V034`):** dropped `IX_InvoiceLine_InvoiceId` and `IX_POLine_Buyer_PONumber`, covered by
 `IX_InvoiceLine_LineNumber` and `UX_POLine_NaturalKey`.
 
-**Decided, not changed now:**
-- Random GUID keys (`NEWID()` in the procedures): fragmentation is harmless at this size.
-- Optimistic locking (`RowVersion`) only on Invoice/Buyer/Vendor; hand-edited set-up tables (delivery
-  rules, email services, buyer addresses and contacts, PO line edits) are last-save-wins. Adding it needs
-  API and screen changes; worth it only if several people edit set-up at once.
-- Normalization debts, each a planned piece of work rather than a quick fix: `sales.POLine` repeats
-  PO-level data (`PONumber`, `PODate`, `Supplier`, `ShipTo`) that `sales.PurchaseOrder` now holds;
-  three overlapping invoice audit tables (`InvoiceHistory`, `InvoiceStatusChange`, `InvoiceSnapshot`);
-  `Buyer.Address`/`ShipTo` text beside `BuyerAddress`. Kept as is: whole-document JSON columns
-  (`DocumentJson`, `RawData`, `ConditionsJson`, `PhotosJson`), the email lists on `OrganizationService`
-  (small settings), and `Invoice.PONumber` (a display copy; the link is `InvoiceLine.POLineId`).
+**Optimistic locking on hand-edited records — fixed (`V035`, procedures, API and screens):** a save
+sends back the version the screen opened; if someone else saved in between, it's refused with a 409
+("Someone else changed this … Reload") instead of silently overwriting. No version sent = no check,
+so older callers keep working.
+
+| Record | Version |
+|---|---|
+| Buyer (with its ship-to addresses) | `Buyer.RowVersion`, checked in `usp_Buyer_Save` |
+| Delivery rule, email service | new `RowVersion` columns (V035) |
+| Buyer's invoice email list | "row count – highest id" (the list is replaced as a whole, so every save changes it) |
+| Edit PO | `sales.ufn_PoEditVersion`: newest `POEdit` id + `PurchaseOrder.RowVersion` (another edit or a re-upload); checked under an app lock inside `usp_PurchaseOrder_Edit` |
+
+**Audit tables — fixed:** `app.InvoiceHistory` was written on every save but read by nothing (the
+History screen reads `InvoiceSnapshot`; status changes are in `InvoiceStatusChange`). The procedures
+no longer write it. The table and its old rows are kept, read-only; dropping it is a later, separate step.
+
+**Decided, not changed:**
+- Random GUID keys (`NEWID()` in the procedures): fragmentation is harmless at this size, and a
+  `NEWSEQUENTIALID()` default would do nothing because the procedures make the ids themselves.
+- `sales.POLine.Supplier` / `PODate` / `ShipTo` are **not** a normalization fault: the spreadsheet import
+  keeps each row as received (lossless import, V009), and they can differ by row in the file.
+  `sales.PurchaseOrder` holds the PDF header. Readers take MIN/MAX per PO.
+- `Buyer.Address` is the buyer's own address block, not a ship-to; `Buyer.ShipTo` is a copy of the
+  default `BuyerAddress`, kept by `usp_Buyer_Save` as the invoice fallback.
+- Kept as is: whole-document JSON columns (`DocumentJson`, `RawData`, `ConditionsJson`, `PhotosJson`), the
+  email lists on `OrganizationService` (small settings), and `Invoice.PONumber` (a display copy; the link is
+  `InvoiceLine.POLineId`).
 ---
 
 ## 8. Authentication & authorization
