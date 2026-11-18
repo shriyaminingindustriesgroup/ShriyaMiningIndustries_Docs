@@ -643,9 +643,43 @@ inside its caller's).
   size, full-text search above ~50,000 invoices; `POStatus.BuyerKey` vs `BuyerId` and `UpdatedOn` vs
   `ModifiedOn` are renamed only when that code changes; child and cache tables (`InvoiceReviewRecipient`,
   `InvoiceSnapshot`, `POStatus`, `AppSetting`) carry their dates through their parent or update time.
-- Read-committed snapshot (readers never wait for writers): to be confirmed on production
-  (`SELECT is_read_committed_snapshot_on FROM sys.databases WHERE name = DB_NAME()`); Azure SQL
-  turns it on by default.
+- Read-committed snapshot (readers never wait for writers) is **on** in production (checked
+  2026-11-17: `is_read_committed_snapshot_on` = 1, Azure SQL's default). Keep it on.
+
+### 7.6 Table structure review (2026-11-17): keys, normalization, indexes
+
+Every table, column, key and index was checked on a database built from empty by the migrations.
+Already right: every table has a primary key (no heaps), every foreign key column has an index (now
+a repository test), no `float`/`money`/`datetime`, all text is `nvarchar`.
+
+**High — fixed (procedure only):** delivery rules are kept by buyer **code** (a rule may be set up
+before its buyer exists), but changing a buyer's code left its rules behind, so they silently stopped
+applying. `app.usp_Buyer_Save` now moves the rules to the new code in the same transaction.
+
+**Medium — fixed (`V033`, guarded: a rule old data breaks is skipped with a warning, never a failed deploy):**
+- Foreign keys `FK_InvoiceHistory_Invoice`, `FK_POEdit_Buyer`, `FK_POStatus_Buyer` (`POStatus` rows with
+  `BuyerKey` 0 were unreachable since V032 and are removed). `usp_Buyer_Delete` refuses a buyer with PO
+  edits and clears its PO status cache.
+- Allowed values: `InvoiceStatusChange.Source` (App, Buyer email, Old invoice) and
+  `InvoiceReviewRecipient.SendStatus` (Pending, Sent, Failed). History status columns and the worked-out
+  PO line statuses get no list on purpose (history keeps what was true then; line statuses are combinations).
+- `IX_Invoice_InvoiceDate`; and `usp_Invoice_GetList` filters and pages without the large `DocumentJson`,
+  reading it only for the page's invoices (same columns returned).
+
+**Low — fixed (`V034`):** dropped `IX_InvoiceLine_InvoiceId` and `IX_POLine_Buyer_PONumber`, covered by
+`IX_InvoiceLine_LineNumber` and `UX_POLine_NaturalKey`.
+
+**Decided, not changed now:**
+- Random GUID keys (`NEWID()` in the procedures): fragmentation is harmless at this size.
+- Optimistic locking (`RowVersion`) only on Invoice/Buyer/Vendor; hand-edited set-up tables (delivery
+  rules, email services, buyer addresses and contacts, PO line edits) are last-save-wins. Adding it needs
+  API and screen changes; worth it only if several people edit set-up at once.
+- Normalization debts, each a planned piece of work rather than a quick fix: `sales.POLine` repeats
+  PO-level data (`PONumber`, `PODate`, `Supplier`, `ShipTo`) that `sales.PurchaseOrder` now holds;
+  three overlapping invoice audit tables (`InvoiceHistory`, `InvoiceStatusChange`, `InvoiceSnapshot`);
+  `Buyer.Address`/`ShipTo` text beside `BuyerAddress`. Kept as is: whole-document JSON columns
+  (`DocumentJson`, `RawData`, `ConditionsJson`, `PhotosJson`), the email lists on `OrganizationService`
+  (small settings), and `Invoice.PONumber` (a display copy; the link is `InvoiceLine.POLineId`).
 ---
 
 ## 8. Authentication & authorization
