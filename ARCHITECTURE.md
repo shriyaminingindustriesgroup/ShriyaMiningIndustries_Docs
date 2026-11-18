@@ -1171,6 +1171,29 @@ but `sqlcmd` defaults to OFF — so a procedure deployed by hand with `sqlcmd -i
 an `R__platform-*.sql` file against a local database) fails on its first insert. Always pass
 `sqlcmd -I`, or simply run the migrator (`apply`), which re-runs every `R__` script (§7.1).
 
+### 12.1 Alert runbook (Operations plan, Phase 4, 18 Nov 2026)
+
+Every alert email, what it means, and the first three things to check. Start from **Admin → Health**
+(tiles turn amber when a target is missed; the lists show the exact sign-in or email) and the build in
+the footer / `/api/ping` (which release is live).
+
+| Alert / signal | What it means | First checks |
+|---|---|---|
+| `ShriyaMining-ExceptionSpike`, `ShriyaMining-FailedRequests` | More than 5 exceptions or failed requests in 15 minutes, any environment | 1. Health → *Errors by code*: which code, since when. 2. Error logs → that code → the correlation ID → Payload logs for the request. 3. Did a deploy just happen (footer / `/api/ping` version)? If so and it's bad: §16 rollback. |
+| `ShriyaMining-EmailSendFailed` | An invoice email reached nobody | 1. Health → Emails → *Invoice to buyer*, Failed: the mail server's answer. 2. Company profile → Services → Invoice Email Service → *Send test*. 3. Zoho: app password changed, daily sending limit, SMTP access. |
+| `ShriyaMining-AccountEmailFailed` (add in the Portal) | A set-password / forgot-password / password-changed email wasn't sent (also Error logs `AUTH-EMAIL-FAILED`) | 1. Health → Emails → *Account*, Failed: the reason. 2. Services → Account emails → *Send test*. 3. Meanwhile, give the person a **temporary password** (Users). |
+| `ShriyaMining-SignInLocked` (add in the Portal) | Someone's password sign-in was locked (5 wrong passwords) | 1. Health → Sign-ins, Result *Locked*: who and from which address. 2. If it's the person themselves: it clears in 15 minutes, or they use Forgot password / you give a temporary password. 3. If the address is unknown and the person didn't try: treat as an attack, see the next row. |
+| `ShriyaMining-SignInRefusedBurst` (add in the Portal) | More than 30 refused sign-ins in 15 minutes | 1. Health → Sign-ins, Result *Refused*: one address trying many emails (password spraying) or one email many times. 2. The app already slows that address (30 in 15 min). 3. If it continues: tell the people concerned to change passwords; consider turning off Microsoft sign-in only if that's the route used. |
+| Uptime check run failed (GitHub email, Docs repo) | `/api/ping` or the sign-in page didn't answer twice, 30 s apart | 1. Open the site yourself. 2. Azure status page / Static Web App in the Portal. 3. A deploy in progress can blip once; two red runs in a row is an outage. |
+| Smoke test failed (red deploy, UI repo) | The new build is live but a basic check failed (pages, cookie, CSRF, admin access) | 1. The failed line says which check. 2. Cookie check failed: re-read §8 cookie rules (no `Expires`, cookies before the body). 3. Roll back (§16) if people are affected. |
+| Budget email (`ShriyaMining-Monthly`) | 50% / 80% of $20 spent, or 100% forecast | 1. Cost Management → cost by resource. 2. Usually the databases awake longer than usual (something calling them often). 3. Application Insights usage (its daily cap stops runaway data). |
+
+**Weekly, 10 minutes:** Health → 7 days (all green? why not?); alert history in Azure Monitor; budget
+so far; Application Insights *Usage and estimated costs*; the uptime check's last runs in the Docs repo.
+
+**Targets** (shown on Health, tested in the UI's `services/health.ts`): no server errors (or under 1% once
+there are 100+ logged requests); nobody locked out right now; account and invoice emails at least 99% sent.
+
 ---
 
 ## 13. Common tasks
