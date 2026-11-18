@@ -515,6 +515,16 @@ empty database from V001–V029 + `R__` and running it again (only the `R__` fil
 
 A review of the real schema (built from the scripts) led to these rules and fixes:
 
+- **All or nothing (review of 18 Nov 2026).** By default SQL Server only cancels the statement that failed and
+  carries on, even to a `COMMIT`: a `DELETE` followed by a failing `INSERT` would save the delete. So:
+  (1) every procedure that writes sets `XACT_ABORT ON` (any error ends it and rolls its transaction back);
+  (2) every procedure with more than one write wraps them in `BEGIN TRANSACTION … COMMIT` (called from
+  another procedure's transaction, it joins that one). The audit found no procedure that could save half a
+  change, but two helpers (`usp_Invoice_SetPurchaseOrders`, `usp_POStatus_Recalculate`) relied on their callers;
+  they now have their own transaction, and 40 procedures gained `XACT_ABORT ON`. Enforced on every build by
+  `ProcedureTransactionTests` (API repo), which lists the reviewed exceptions with their reasons (the batched
+  log purge, the payload-log cross-link, and procedures where only one of two writes can run). Also keep a
+  `WITH … AS (…)` block directly before the statement that uses it: `BEGIN TRANSACTION` goes before the `WITH`.
 - **Locking belongs in the procedures that write**, never in a shared view. `app.vInvoiceDetails`
   had `WITH(UPDLOCK,HOLDLOCK)`, so every invoice list and detail read took update locks and readers
   blocked each other and saves. Removed; every writer that reads it (`usp_Invoice_SaveSnapshot`,
