@@ -510,8 +510,8 @@ Reviewed and **kept on purpose**:
 
 - **The invoice is stored as a document and as rows.** `app.Invoice.DocumentJson` is the invoice
   as built (the source for Print/PDF/Excel); `InvoiceLine` rows, the header columns copied out of it
-  (container no, shipping reference, vessel) and `Invoice.PONumber` (the PO numbers as printed) are
-  derived from it, **only** by `usp_Invoice_Create`/`usp_Invoice_Update` in the same transaction,
+  (container no, shipping reference, vessel) and the invoice's PO numbers (`app.InvoicePurchaseOrder`,
+  one row per PO, V041) are derived from it, **only** by `usp_Invoice_Create`/`usp_Invoice_Update` in the same transaction,
   for PO fulfilment maths and searching. Never write those columns anywhere else.
 - **Files in the database** (`PODocument.Content`, `LegacyInvoiceUpload.Content`, each emailed
   PDF in `InvoiceReviewRequest.AttachmentContent`): they are records (what was received / sent) and
@@ -706,14 +706,30 @@ left by a migration runner used before DbUp, with its two system-named defaults;
 **Decided, not changed:**
 - Random GUID keys (`NEWID()` in the procedures): fragmentation is harmless at this size, and a
   `NEWSEQUENTIALID()` default would do nothing because the procedures make the ids themselves.
-- `sales.POLine.Supplier` / `PODate` / `ShipTo` are **not** a normalization fault: the spreadsheet import
+- `sales.POLine.Supplier` / `PODate` are **not** a normalization fault: the spreadsheet import
   keeps each row as received (lossless import, V009), and they can differ by row in the file.
   `sales.PurchaseOrder` holds the PDF header. Readers take MIN/MAX per PO.
 - `Buyer.Address` is the buyer's own address block, not a ship-to; `Buyer.ShipTo` is a copy of the
   default `BuyerAddress`, kept by `usp_Buyer_Save` as the invoice fallback.
 - Kept as is: whole-document JSON columns (`DocumentJson`, `RawData`, `ConditionsJson`, `PhotosJson`), the
-  email lists on `OrganizationService` (small settings), and `Invoice.PONumber` (a display copy; the link is
-  `InvoiceLine.POLineId`).
+  and the email lists on `OrganizationService` (small settings).
+
+**Standards review (2026-11-18) — fixed:** a catalog audit of every table found every table keyed and
+clustered, every foreign key enforced and indexed, no duplicate indexes, consistent names and no old
+data types. What it found, fixed:
+- `V040` column standards: an `ISJSON` check on the ten JSON columns that had none; emails 320
+  everywhere (Buyer, Vendor, User were 255) and the company phone 40; `Invoice.InvoiceDate` a `DATE`;
+  sizes for short text that was `NVARCHAR(MAX)` (`InvoiceLine.Description` 2000, `CrateRanges` 400,
+  `POLine.SPSItem` 1000, `Buyer.Address` 1000; the procedures refuse longer text in words);
+  `POLine.ShipTo` dropped (never written or read); `Vendor.Address` a computed column from
+  AddressLine1-3; `POLine.BuyerId` and `POImportBatch.BuyerId` `NOT NULL` instead of a CHECK. Each step
+  is skipped with a warning when existing rows don't fit.
+- `V041` first normal form: `Invoice.PONumber` held a list in one column. Each invoice's PO numbers are
+  now rows in `app.InvoicePurchaseOrder` (`InvoiceId, PONumber, Seq`; PO number indexed). The text typed
+  on the invoice is split on "," and ";" (`app.ufn_SplitPoNumbers`) and saved by
+  `usp_Invoice_SetPurchaseOrders` inside the invoice save; the PO column filter matches rows exactly;
+  `vInvoiceDetails` still returns a `PONumber` text (the numbers joined with ", ") so the API and screens
+  are unchanged.
 ---
 
 ## 8. Authentication & authorization
