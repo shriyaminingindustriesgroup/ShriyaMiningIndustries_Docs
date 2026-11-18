@@ -863,13 +863,13 @@ instead of passing on, and one production migration failed that way (nothing dep
 same day). The `SQL_CONNECTION_STRING` GitHub secret (the
 administrator password) was deleted on 2026-11-17 after the first passwordless run succeeded.
 
-**Still holding the admin password** (a rotation/drift risk, flagged rather than ignored): the
-GitHub secret `SQL_CONNECTION_STRING_TEST` (Test migrations and the test-database health check),
-and, until `shriyaminingdbtest` is awake again (its free allowance resets on the 1st), the SWA
-**test** environment setting and the test standby Function App (`ShriyaMiningIndustries-api-test`).
-To switch those: create the same limited user in `shriyaminingdbtest` first, then change both
-settings to it, with **that user's** password (not the administrator's). Changing the administrator
-password afterwards (then updating the two GitHub secrets) is optional hardening, not yet done.
+**Test environment, same as production (2026-11-17):** the SWA **test** environment setting uses
+the same limited user in `shriyaminingdbtest` (its own password, not the administrator's), and the
+pipeline's Azure identity is `db_owner` there, so test migrations are passwordless too. The GitHub
+secret `SQL_CONNECTION_STRING_TEST` was deleted. The administrator password is no longer stored in
+GitHub or in any app setting. The test standby Function App (`ShriyaMiningIndustries-api-test`)
+is stopped (checked 2026-11-18: it answers 403) and its setting was switched to the limited user too.
+Changing the administrator password is optional hardening, not done.
 
 **SQL injection:** every value reaches SQL as a parameter, procedures build no SQL at run time,
 and `SqlInjectionGuardTests` (Api.Tests, every push) fails the build if SQL text is ever built from
