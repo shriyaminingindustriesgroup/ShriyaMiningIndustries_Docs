@@ -1,0 +1,35 @@
+name: Uptime check
+
+# Operations plan, Phase 3 (18 Nov 2026). Every hour: is the app up on production and test? Calls only
+# /api/ping (answers without the database, so it never wakes the serverless database or costs money) and
+# the sign-in page. Lives in this public repo because GitHub Actions minutes are free for public repos.
+# A failure turns the run red and GitHub emails whoever last changed this schedule.
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  uptime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        site:
+          - https://gray-meadow-0ebc61d10.6.azurestaticapps.net
+          - https://gray-meadow-0ebc61d10-test.centralus.6.azurestaticapps.net
+    steps:
+      - name: Ping and sign-in page
+        run: |
+          check() {
+            PING=$(curl -s -m 30 "${{ matrix.site }}/api/ping" || true)
+            PAGE=$(curl -s -m 30 -o /dev/null -w '%{http_code}' "${{ matrix.site }}/sign-in" || true)
+            echo "ping: $PING | sign-in page: $PAGE"
+            echo "$PING" | grep -q '"message":"pong"' && [ "$PAGE" = "200" ]
+          }
+          # One retry after 30 s: a single blip (a cold start) isn't an outage.
+          check || { sleep 30; check; } || { echo "::error::${{ matrix.site }} is not answering"; exit 1; }
