@@ -824,6 +824,14 @@ During the changeover two sign-ins work side by side; the setting `AUTH_ALLOW_PL
   never from the caller's Host or Origin. Sent by the **Account emails** service (`ACCOUNT_EMAIL`, Company
   profile → Services; V043 copied the Email Alerts From address, so its mailbox login is reused), logged in
   `app.EmailLog` as kind `Account`. On Test, `EMAIL_TEST_ALLOWLIST` still applies.
+- **Temporary passwords (V044, plan D17):** Admin → Users → **Temporary password** makes a random
+  password (three groups of four easy-to-read characters, about 69 bits), shows it to the Admin **once**
+  to pass on privately, and stores only its hash (`UserPassword.MustChange`, `TemporaryUntil`; 72 hours,
+  `AUTH_TEMP_PASSWORD_HOURS`). It needs no email. The person's sessions end and their history records it;
+  not for yourself. Signing in with it gives a session marked `MustChangePassword`: the API refuses every
+  call except `me`, `me/password`, `auth/*` and health (403 `AUTH-CHANGE-PASSWORD-403`) and the app shows
+  only **Choose your password** (`/choose-password`; no current password asked, must differ from the
+  temporary one). Expired: refused with a message.
 - **CSRF:** a changing request that carries `smi_session`, or goes to `auth/*` / `me/*`, must send
   `X-Requested-With: smi` (the UI's axios client always does) and, when sent, an Origin that is one of
   the app's addresses.
