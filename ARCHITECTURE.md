@@ -123,7 +123,7 @@ one Azure subscription.
 | Storage account | `stshriyaminingapitest` | Standard_LRS | Backs the test Function App's internal state. |
 | SQL Server | `shriyaminingindustries` (`shriyaminingindustries.database.windows.net`) | Logical server | SQL-auth admin login configured (ask a team member for the username/password — neither is written down here; this repo is public). No Azure AD admin configured yet. |
 | SQL Database (prod) | `shriyaminingdb` | General Purpose, Serverless, 0.5 vCore min, free offer, auto-pause after 60 min idle | Auto-pause delay is managed by Azure on a free-offer database: the Portal shows no auto-pause setting to change (checked 2026-11-17), so it stays as Azure sets it. Data max size 32 GB = the free storage amount. Max vCores 2 / min 0.5: billing is per second for the larger of the minimum and what queries use (about 2% CPU), so lowering max vCores would save almost nothing. **When the monthly free allowance runs out: continue with charges** (pay as you go, since 2026-11-17; before, the database paused until the 1st with error 42119 and the app went down). Backup storage redundancy: **Zone-redundant** (since 2026-11-17; same price as locally-redundant, survives losing one datacenter in Central US; geo-redundant isn't offered on the free offer). |
-| SQL Database (test) | `shriyaminingdbtest` | Same tier as prod, free offer only | Pauses when its free allowance runs out (until the 1st): kept free on purpose, for budget. The CI test database (§6.1) covers building and testing the scripts meanwhile. |
+| SQL Database (test) | `shriyaminingdbtest` | Same tier as prod, free offer | **Continues with charges** when the monthly free allowance runs out (pay as you go, since 2026-11-17, like prod; before, it paused until the 1st and test deploys skipped the database). It costs money only for the time it's awake beyond the free allowance: auto-pause stops billing for compute when it's idle. |
 | Application Insights | `ShriyaMiningIndustries-api` | Standard | Shared telemetry sink for all four API-side deployments (prod/test × co-located/standalone). One place to watch live traffic for any of them — see §12. |
 | Azure AD App Registration | `ShriyaMiningIndustriesApi-github-actions` (App ID `32f692ff-e4ba-4492-a4cc-24375ea72d2a`) | — | Used for GitHub Actions OIDC login (`azure/login@v2`), no stored client secret. Has **two** federated credentials, one per branch — see §6. |
 | Action Group | `ShriyaMiningAlerts` | Email (verified) | Notifies on the three alert rules below. |
@@ -657,7 +657,7 @@ before its buyer exists), but changing a buyer's code left its rules behind, so 
 applying. `app.usp_Buyer_Save` now moves the rules to the new code in the same transaction.
 
 **Medium — fixed (`V033`, guarded: a rule old data breaks is skipped with a warning, never a failed deploy):**
-- Foreign keys `FK_InvoiceHistory_Invoice`, `FK_POEdit_Buyer`, `FK_POStatus_Buyer` (`POStatus` rows with
+- Foreign keys `FK_InvoiceHistory_Invoice` (gone with the table, V037), `FK_POEdit_Buyer`, `FK_POStatus_Buyer` (`POStatus` rows with
   `BuyerKey` 0 were unreachable since V032 and are removed). `usp_Buyer_Delete` refuses a buyer with PO
   edits and clears its PO status cache.
 - Allowed values: `InvoiceStatusChange.Source` (App, Buyer email, Old invoice) and
@@ -680,10 +680,19 @@ so older callers keep working.
 | Delivery rule, email service | new `RowVersion` columns (V035) |
 | Buyer's invoice email list | "row count – highest id" (the list is replaced as a whole, so every save changes it) |
 | Edit PO | `sales.ufn_PoEditVersion`: newest `POEdit` id + `PurchaseOrder.RowVersion` (another edit or a re-upload); checked under an app lock inside `usp_PurchaseOrder_Edit` |
+| Company profile (`app.Vendor`) | `Vendor.RowVersion`, checked in the profile update |
+| Role (name and permissions) | `Role.RowVersion` (every save updates the role row), checked in `usp_Role_Save` |
+| User's roles | `User.RowVersion`, checked in `usp_User_SetRoles` (nothing else writes the user row, so signing in doesn't change it) |
+| Crate type | new `RowVersion` column (V036), checked in `usp_CrateType_Save` |
+
+Every record a person edits now has this check. Email templates and app settings are single-Admin
+settings and are left without it. `RowVersionToken` (Shared.Kernel) turns versions into the 16-character
+token the screens hold.
 
 **Audit tables — fixed:** `app.InvoiceHistory` was written on every save but read by nothing (the
 History screen reads `InvoiceSnapshot`; status changes are in `InvoiceStatusChange`). The procedures
-no longer write it. The table and its old rows are kept, read-only; dropping it is a later, separate step.
+stopped writing it, and `V037` removed the table. Its old rows repeated what those two tables hold; to
+see them, restore the database to a point in time before V037 ran (Azure keeps 7 days) as a new database.
 
 **Decided, not changed:**
 - Random GUID keys (`NEWID()` in the procedures): fragmentation is harmless at this size, and a
