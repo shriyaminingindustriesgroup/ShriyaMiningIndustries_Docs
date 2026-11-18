@@ -880,6 +880,10 @@ During the changeover two sign-ins work side by side; the setting `AUTH_ALLOW_PL
    disable / enable people (reason required) and see each person's history on Console → Users. Login success and
    application-level authorization are two separate things — don't conflate them when debugging a
    "logged in but nothing works" report.
+   **Role cache (18 Nov 2026):** the roles, permissions and status are kept in memory for 30 seconds per API
+   instance (`UserRoleCache`, `CachedUserRoleLookup`), so most calls make no database read for them. Any
+   Admin change to users or roles clears the instance's cache at once; other instances catch up within 30
+   seconds. Disabling someone also ends their sessions in the database immediately. No cost.
    **The header is trusted only because the Static Web App sits in front.** Every endpoint is
    `AuthorizationLevel.Anonymous` at the Azure level; the Static Web App removes any
    `x-ms-client-principal` a caller sends and adds its own after a real sign-in. Run the same API
