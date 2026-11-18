@@ -800,7 +800,10 @@ During the changeover two sign-ins work side by side; the setting `AUTH_ALLOW_PL
   **Password link** (emails the person a link to set their password; an Admin never sees or sets one).
   A first-time visitor is sent to `/sign-in`; *Forgot password* is also how someone sets their first password.
 - **Session:** a random 32-byte token in the cookie `smi_session` (HttpOnly, Secure, SameSite=Strict,
-  path `/`; the Static Web App adds `Domain=<site host>`, proved in Sprint 0). The database stores only
+  path `/`; the Static Web App adds `Domain=<site host>`, proved in Sprint 0). **Two platform rules found
+  in production (18 Nov 2026):** the Static Web App silently removes any `Set-Cookie` that has an
+  `Expires` attribute (use `Max-Age` only; `Max-Age=0` clears), and a cookie appended after the response
+  body is written is lost (append first). Both broke sign-in once; `SessionCookieOrderTests` guards them. The database stores only
   its SHA-256 (`security.UserSession`): idle 60 minutes (slid at most every 5 minutes), absolute 12
   hours. Each API instance remembers a session for 30 seconds (`SessionCache`); roles and status are
   still read on every call. Disable / remove / password change / *Sign out everywhere* end sessions.
