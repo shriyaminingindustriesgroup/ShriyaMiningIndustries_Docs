@@ -327,6 +327,12 @@ flowchart LR
   of one 2,700-line file. The standards review also added JSON checks, consistent column sizes,
   <code>InvoiceDate</code> as a date (V040), and an invoice's PO numbers as rows in
   <code>app.InvoicePurchaseOrder</code> instead of a list in one column (V041). ARCHITECTURE.md §7.1, §7.4, §7.6.</p>
+  <p><strong>User accounts, step 1 (18 Nov, V042):</strong> each person is <em>Invited</em>, <em>Active</em> or
+  <em>Disabled</em> (with who, when and why) instead of a yes/no flag. Console → Users can search and filter,
+  turn access off (reason required) and back on, show each person's history, and export to Excel. Nobody can
+  turn off themselves or the last active Admin. A disabled person sees "Your access has been turned off".
+  New tables for the coming sign-in: <code>SignInMethod</code>, <code>UserExternalLogin</code>,
+  <code>UserChange</code>, <code>log.SignInEvent</code>. ARCHITECTURE.md §7.2, §7.6, §8.</p>
   <p><strong>Tracking → Product</strong> groups PO lines on the SKU <em>without its delivery prefix</em>
   (<code>BED-GRNABSBLK1224FL</code> and <code>GRNABSBLK1224FL</code> are one product, with a chip per
   delivery place). The prefixes are the <code>itemStartsWith</code> values of the buyer's delivery rules,

@@ -286,7 +286,11 @@ empty database from V001–V029 + `R__` and running it again (only the `R__` fil
 ### 7.2 Schema overview
 
 - **`security` schema** — `User`, `Role`, `Permission`, `UserRole` (many-to-many), `RolePermission`
-  (many-to-many). Seeded roles: `Admin` (all permissions), `User`, `Approver`, `Viewer`, and `Manager` (V011; see §8) — see
+  (many-to-many). Since V042 (user accounts, Epic 1): `User.Status` (`Invited` / `Active` / `Disabled`,
+  with who changed it, when and why) replaces `IsActive`; `SignInMethod` (lookup of the ways to sign in);
+  `UserExternalLogin` (a person's Google / Microsoft account, matched on the provider's id, never the
+  email); `UserChange` (every change an Admin makes to a person, before / after as JSON). `log.SignInEvent`
+  records every sign-in attempt (no foreign keys, purged like the other logs). Seeded roles: `Admin` (all permissions), `User`, `Approver`, `Viewer`, and `Manager` (V011; see §8) — see
   `database/migrations/V003__seed-initial-data.sql` for the exact permission grants per role.
 - **`app` schema** — Vendor, Buyer, Invoice + InvoiceLine, PO import records, company profile, and
   related master data.
@@ -770,6 +774,12 @@ data types. What it found, fixed:
   `usp_Invoice_SetPurchaseOrders` inside the invoice save; the PO column filter matches rows exactly;
   `vInvoiceDetails` still returns a `PONumber` text (the numbers joined with ", ") so the API and screens
   are unchanged.
+- `V042` user accounts (login plan, Epic 1): `security.User.Status` replaces `IsActive` (1 → Active,
+  0 → Disabled; the procedures still return a worked-out `IsActive`), plus `SignInMethod`,
+  `UserExternalLogin`, `UserChange`, `log.SignInEvent` and the `AUTH_*` settings (added only when
+  missing). Rules in the procedures (`R__platform-50-admin.sql`): disabling needs a reason; nobody can
+  disable themselves; the last active Admin can't be disabled or removed (`ufn_IsLastActiveAdmin`);
+  every create / restore / role change / status change / removal writes a `UserChange` row.
 ---
 
 ## 8. Authentication & authorization
@@ -786,7 +796,10 @@ data types. What it found, fixed:
    permissions **by email** — not by any Entra object ID — via `UserRoleLookupRepository`, joining
    `security.User → UserRole → Role → RolePermission → Permission`. This means: logging in via AAD
    always succeeds if your Entra identity is valid, but you get **zero permissions** until your
-   email exists as an active row in `security.User` with a role assigned. Login success and
+   email exists as an `Active` row in `security.User` (V042 `Status`) with a role assigned. A
+   `Disabled` or `Invited` person gets no roles, and `/api/me` returns `accountStatus` so the app says
+   "Your access has been turned off" or "invitation not accepted yet" instead of a blank page. Admins
+   disable / enable people (reason required) and see each person's history on Console → Users. Login success and
    application-level authorization are two separate things — don't conflate them when debugging a
    "logged in but nothing works" report.
    **The header is trusted only because the Static Web App sits in front.** Every endpoint is
@@ -810,8 +823,8 @@ data types. What it found, fixed:
    IF NOT EXISTS (SELECT 1 FROM security.[User] WHERE Email = '<email>')
    BEGIN
        DECLARE @NewUserId NVARCHAR(255) = CAST(NEWID() AS NVARCHAR(255));
-       INSERT INTO security.[User] (UserId, Email, DisplayName, IsActive, CreatedBy, ModifiedBy)
-       VALUES (@NewUserId, '<email>', '<display name>', 1, 'bootstrap-admin', 'bootstrap-admin');
+       INSERT INTO security.[User] (UserId, Email, DisplayName, Status, CreatedBy, ModifiedBy)
+       VALUES (@NewUserId, '<email>', '<display name>', N'Active', 'bootstrap-admin', 'bootstrap-admin');
        INSERT INTO security.UserRole (UserId, RoleId, GrantedBy)
        VALUES (@NewUserId, 1, 'bootstrap-admin'); -- RoleId 1 = Admin
    END;
