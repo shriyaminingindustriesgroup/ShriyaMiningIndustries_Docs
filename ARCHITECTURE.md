@@ -32,12 +32,31 @@ All three live under the **`shriyaminingindustriesgroup`** GitHub account.
 | `ShriyaMiningIndustries_UI` | `shriyaminingindustriesgroup/ShriyaMiningIndustries_UI` | The frontend: Vue 3 + Vite + TypeScript. Deployed as an Azure Static Web App with the C# API's build bundled in as its co-located Functions backend (see §4). | `main` (prod), `test` (test env) |
 | `ShriyaMiningIndustries_Docs` | `shriyaminingindustriesgroup/ShriyaMiningIndustries_Docs` | This repo. Living architecture documentation, public so it can be published free via GitHub Pages. **Never put secrets, connection strings, or passwords in here** — reference *where* a value lives (a named GitHub secret, a named app setting), never the value itself. | `main` |
 
+**Tech stack** (all on the newest stable release, checked against the package registries on
+2026-11-18; long-term-support lines where there is a choice):
+
+| Area | What | Version | Note |
+|---|---|---|---|
+| API runtime | .NET, Azure Functions isolated worker | .NET 10 (LTS), Functions v4, Worker 2.52 / SDK 2.1 | .NET 11 (STS) is out; 10 is the LTS line, supported to Nov 2028. `global.json` pins the 10.0 SDK band. |
+| Data access | Dapper, Microsoft.Data.SqlClient | 2.1.89, 7.1.2 | Every query is a stored procedure (§7.4). |
+| Migrations | DbUp (dbup-sqlserver) | 7.2.0 | §7.1 |
+| Email, files | MailKit, ClosedXML, ExcelDataReader, PdfPig, HtmlSanitizer | 5.0.0, 0.105.1, 3.9.0, 0.1.16, 11.0.26 | MailKit 5: refused recipients are handled on the send request. |
+| Telemetry | OpenTelemetry, Azure Monitor exporter | 1.21.0, 1.10.0 | |
+| API tests | xUnit.net v3 on Microsoft Testing Platform v2, FluentAssertions | 4.0.3, 7.2.2 | FluentAssertions stays on 7.x, the last Apache-2.0 line (8.x needs a paid licence). |
+| Database | Azure SQL Database (serverless); CI uses a SQL Server 2025 container | | |
+| UI | Vue, vue-router, axios | 3.5.45, 5.5.1, 1.21.1 | |
+| UI build | Vite (Rolldown), @vitejs/plugin-vue, Vitest | 8.3.8, 6.0.11, 5.1.0 | |
+| UI types | TypeScript, vue-tsc | 6.0.3, 3.3.14 | TypeScript 7 (the native compiler) is out, but vue-tsc can't run on it yet; 6.0 is the newest that checks `.vue` files. |
+| UI pipeline | Node.js | 26 (Active LTS) | |
+| Pipelines | actions/checkout, setup-dotnet, setup-node, azure/login | v7, v6, v7, v3 | All run on Node 24. |
+| Docs diagrams | Mermaid | 12.3.0 | Loaded as an ES module, `securityLevel: 'strict'`. |
+
 **Local clone layout** (on the primary dev machine), for orientation — not meaningful outside that
 machine:
 ```
-C:\Users\<user>\OneDrive\GIT\ShriyaMiningIndustriesApi\ShriyaMiningIndustriesApi\  (api repo — note the folder name doesn't match the GitHub repo name, which is ShriyaMiningIndustries_api)
-C:\Users\<user>\OneDrive\GIT\ShriyaMiningIndustries_UI\                        (UI repo)
-C:\Users\<user>\OneDrive\GIT\ShriyaMiningIndustries_Docs\                      (this repo)
+C:\Users\<user>\OneDrive\GIT\Shriyamining\ShriyaMiningIndustries_api\   (api repo)
+C:\Users\<user>\OneDrive\GIT\Shriyamining\ShriyaMiningIndustries_UI\    (UI repo)
+C:\Users\<user>\OneDrive\GIT\Shriyamining\ShriyaMiningIndustries_Docs\  (this repo)
 ```
 
 ---
@@ -76,8 +95,8 @@ not the standalone Function Apps — serve 100% of real user traffic. SWA Free t
 an external Function App (that needs Standard tier, a real ongoing cost); instead, each SWA
 environment (production and test) gets its *own private copy* of the API's compiled build,
 uploaded as part of that environment's own deployment. The standalone Function Apps
-(`ShriyaMiningIndustries-api`, `ShriyaMiningIndustries-api-test`) are kept deployed and healthy
-on purpose, as a **decouple-ready fallback** — if you ever need the API to be a genuinely separate
+(`ShriyaMiningIndustries-api`, `ShriyaMiningIndustries-api-test`) are kept, **stopped** (since
+2026-11-17; not deleted), as a **decouple-ready fallback** — if you ever need the API to be a genuinely separate
 service (e.g. to upgrade SWA to Standard and link to it, or to serve a non-browser client), the
 code and infrastructure are already there and already proven working. See §9 for the exact
 decoupling steps.
@@ -157,22 +176,25 @@ Triggers on push to `main` or `test`. Branch decides the environment end-to-end 
 ```mermaid
 flowchart LR
     Push["push to main or test"] --> Test["test job:\nrestore, build →\nthrowaway SQL Server, built from the scripts →\nall tests (incl. repository tests)"]
-    Test --> Migrate["migrate job:\nopen SQL firewall for runner IP →\nintegration test (always vs. TEST db) →\nDbUp: new V### scripts once,\nevery R__ script (procs, views) again (branch DB) →\nclose firewall"]
+    Test --> Migrate["migrate job:\nopen SQL firewall for runner IP →\nDbUp: new V### scripts once,\nevery R__ script (procs, views) again (branch DB) →\nclose firewall"]
     Migrate --> Deploy["deploy job:\npublish API →\nzip + GitHub Release (api-<sha> or api-test-<sha>) →\nrepository_dispatch to UI repo\n(the UI repo deploys it with the Static Web App)"]
 ```
 
 Key points worth knowing when debugging this pipeline:
 
-- **The test job has its own throwaway SQL Server** (2026-11-17): a `mcr.microsoft.com/mssql/server:2022`
-  container on the runner (free), with a random password made for that run and never stored. The
+- **The test job has its own throwaway SQL Server** (2026-11-17): a `mcr.microsoft.com/mssql/server:2025-latest`
+  container on the runner (free; SQL Server 2025 since 2026-11-18, the closest to Azure SQL's engine), with a random password made for that run and never stored. The
   migrator builds an empty database from `database/migrations`, and `SQL_CONNECTION_STRING` points the
   tests at it, which switches on `ShriyaMiningIndustries.Repositories.Tests` (every repository against
   real SQL, plus a check that every procedure and view still compiles) and the other database tests.
-  So every push also proves the scripts build an **empty** database. Test projects run one after
-  another (`-m:1`): run together, they made a small database wait for query memory and time out.
-- **The integration test always runs against the test database**, regardless of branch. This was
-  deliberately fixed (it used to run against prod on every single deploy) — a throwaway
-  health-check test has no business holding a live connection to production.
+  So every push also proves the scripts build an **empty** database. Tests run on xUnit.net v3
+  with Microsoft Testing Platform (`global.json` → `"test": { "runner": "Microsoft.Testing.Platform" }`):
+  `dotnet test --solution ShriyaMiningIndustriesApi.slnx --configuration Release --no-build --max-parallel-test-modules 1`.
+  The test projects run one after another: run together, they made a small database wait for
+  query memory and time out.
+- **The migrate job has no integration test any more** (removed 2026-11-17, with the test
+  database's password): the test job's throwaway database already runs every repository against
+  real SQL, and the health endpoint is checked after each deploy.
 - **DbUp migrations are branch-targeted**, not "both every time." Before the Test/Prod split,
   every push republished stored procedures to *both* databases unconditionally — that defeated the
   point of having an isolated test environment, so it's gated by branch now.
@@ -241,9 +263,16 @@ database object:
   databases: check what exists first (`COL_LENGTH`, `sys.indexes`, …), because production was
   created before these scripts existed (`seed-baseline`), and its system-made constraint names
   differ from a database built from V001.
-- **`R__*.sql`** — every stored procedure and view, as `CREATE OR ALTER`. They run **on every
-  deploy** (`ScriptType.RunAlways`), after all `V###` scripts, so a changed procedure reaches the
-  database just by editing it there. Nothing in them may change data or assume it runs once.
+- **`R__*.sql`** — every stored procedure, view and function, as `CREATE OR ALTER`. They run **on
+  every deploy** (`ScriptType.RunAlways`), after all `V###` scripts, so a changed procedure reaches
+  the database just by editing it there. Nothing in them may change data or assume it runs once.
+  Since 2026-11-18 they are **one file per area**, run in file-name order:
+  `R__error-handling.sql` (error-log insert, log purge), then `R__platform-00-shared.sql` (the invoice
+  views and the functions the others use), `-10-invoices`, `-11-old-invoices`, `-12-invoice-review`,
+  `-13-email`, `-20-po-import`, `-21-po-ledger`, `-22-purchase-orders`, `-30-buyers`,
+  `-31-delivery-rules`, `-40-crates`, `-45-company`, `-50-admin`, `-60-settings-logs`. Each object
+  lives in exactly one file (a second copy would overwrite it on every deploy). The single
+  `R__platform-procedures.sql` (2,729 lines) was split byte for byte.
 
 Until 2026-11-17 there were two owners. DbUp ran `R__` scripts only once (journaled by name), so
 procedure changes actually reached the databases through a second tool: a SQL Database Project
@@ -527,14 +556,25 @@ Reviewed and **kept on purpose**:
 ### 7.4 Repository rules (review of 2026-11-17)
 
 Every database call goes through a repository: an interface in the module's `Abstractions`, a
-class in `Infrastructure`, Dapper, parameterised SQL, the cancellation token passed on, and
+class in `Infrastructure`, Dapper, a **stored procedure**, the cancellation token passed on, and
 connections from `IDbConnectionFactory` (which waits while the database wakes up). Services and
 functions never hold SQL. On top of that:
 
-- **Stored procedure or SQL in the repository?** A stored procedure for anything that changes
-  several rows that must agree, needs locking, or guards money and statuses (invoice create/update
-  and status, the buyer's decision, PO import, roles). Plain SQL in the repository for simple reads
-  and add/change/delete of small set-up rows (services, delivery rules, templates, settings).
+- **Every query is a stored procedure** (2026-11-18). The C# carries no SQL text: reads and writes
+  alike are procedures in the area's `R__platform-NN-*.sql` file, where they are reviewed, tested from
+  an empty database and deployed with the schema they use. (Until then, simple reads and small set-up
+  tables used SQL in the repository; about 55 such queries in 15 repositories were moved, each reading
+  and writing exactly what it did.) The conventions:
+  - String parameters are `NVARCHAR(MAX)`: a value longer than its column then fails (error 2628) as
+    before, instead of being cut short silently by a too-short parameter.
+  - Lists go in as a JSON array read `WITH (value NVARCHAR(4000) '$')`, which gives the values the
+    database collation (case-insensitive), as Dapper's `IN @list` did. `OPENJSON`'s default output is
+    a binary collation: compared directly, PO numbers would become case-sensitive.
+  - A save checked against the version the editor opened returns a status (`'Conflict'`) and the
+    repository throws the same `ConflictException` and message as before.
+  - Not procedures, on purpose: the migrator's own journal table (it runs before any procedure can
+    exist) and the health check's `SELECT 1`. `SqlInRepositoriesTests` fails on SQL text anywhere
+    else in the API's C#.
 - **All or nothing = one call.** Two writes that must both happen are ONE procedure, or ONE
   repository method with its own transaction (e.g. `AppSettingsRepository.SaveAsync`), never two
   repository calls from a service: each call opens its own connection, so they can't share a
@@ -556,24 +596,21 @@ functions never hold SQL. On top of that:
 - **No database call per item in a loop.** Read everything the loop needs first (e.g. old-invoice
   import reads all PO lines and taken invoice numbers once, not per file). Bounded loops of a few
   calls (the ≤ 10 recipients of an invoice email) are fine.
-- **No SQL built from values.** Values always go in as parameters (`@Id`); the only text ever
-  inserted into SQL is a `private const string` (a fixed column list or WHERE clause). A procedure
-  is not safer than parameterised SQL in a repository — both are immune to injection — so moving
-  queries into procedures is never needed for security. `SqlInjectionGuardTests` scans the API
+- **No SQL built from values.** Values always go in as parameters (`@Id`). (Procedures were not
+  needed for security — parameterised SQL is immune to injection too — they were chosen for one
+  place to review, test and deploy the SQL.) `SqlInjectionGuardTests` scans the API
   source on every push and fails on an interpolated or `+`-joined SQL string with a non-const value,
   on `CommandText` from a variable, and on dynamic SQL (`EXEC(@sql)`, `sp_executesql`) in the `R__`
   scripts. The app connects as a limited database user (§11).
 - **One owner per table.** `app.AppSetting` is only read and written through `IAppSettings`
-  (`Shared.Data/AppSettingsRepository`), whatever the module. The exception is `PayloadLogWriter`'s
-  own read of its three settings, on the failure path, which must not wait for a sleeping database.
-- **Short forms.** `Shared.Data/Db` (`ProcAsync`, `QueryAsync`, `ExecuteAsync`, …) replaces the
-  open-connection / command / Dapper lines; used in new and changed repository code
-  (`ReviewSetupRepository`, `AppSettingsRepository`), and existing methods move over when they're
-  next changed. A bulk move was measured and declined (2026-11-17): 55 of 101 repository methods are
-  simple one-call methods (about 2 lines each to gain); the other 46 (transactions, several result
-  sets, built parameters) would stay as they are anyway, so it wasn't worth rewriting working code.
+  (`Shared.Data/AppSettingsRepository`), whatever the module. `PayloadLogWriter` reads its three
+  settings with the same procedure (`app.usp_AppSetting_GetList`) on its no-wait connection: it runs
+  on the failure path and must not wait for a sleeping database.
+- **Short forms.** `Shared.Data/Db` runs procedures only: `Db.Proc(...)` (a stored-procedure
+  `CommandDefinition`, for several result sets) and `ProcAsync`, `ProcQueryAsync`,
+  `ProcFirstOrDefaultAsync`, `ProcScalarAsync`; the plain-SQL helpers were removed (2026-11-18).
   `Shared.Data`'s three writers (role lookup on every request, error and payload log) keep plain
-  ADO.NET on purpose: they're on the hot or failure path.
+  ADO.NET commands on purpose (hot or failure path), calling procedures too.
 - **Messages people see.** Every 400/403 says what's wrong: `ValidationException` shows its
   reason (it used to be hidden behind "Invalid input provided", copied from the old Node API), and a
   missing permission or role reads "You do not have permission to do this (needs the invoice.status
@@ -586,7 +623,10 @@ functions never hold SQL. On top of that:
   shared helpers stay in the main file. Same class, so callers, DI and tests are unchanged; a real
   split into separate classes only when one part needs different dependencies.
 - **Tested against real SQL.** `ShriyaMiningIndustries.Repositories.Tests` runs every repository
-  against a database built from the scripts (in CI on every push, §6.1; locally set
+  against a database built from the scripts (`MovedQueryTests` covers the queries moved on
+  2026-11-18 that no other test calls; measured with an Extended Events session, every procedure
+  runs in tests except `Invoice_UpdateShipping`, `InvoiceContainerFit_Save`, `POImport_Restore` and
+  the PDF-PO ones, which `PurchaseOrderEndToEndTests` covers when `SMI_SCRATCH_DB` is set) (in CI on every push, §6.1; locally set
   `SQL_CONNECTION_STRING` to a database built with the migrator). Its first run found a real bug:
   a buyer with a ship-to address or invoice emails couldn't be deleted (raw foreign-key error);
   `usp_Buyer_Delete` now removes the buyer's own set-up rows in the same transaction.
@@ -714,7 +754,7 @@ left by a migration runner used before DbUp, with its two system-named defaults;
 - Kept as is: whole-document JSON columns (`DocumentJson`, `RawData`, `ConditionsJson`, `PhotosJson`), the
   and the email lists on `OrganizationService` (small settings).
 
-**Standards review (2026-11-18) � fixed:** a catalog audit of every table found every table keyed and
+**Standards review (2026-11-18) — fixed:** a catalog audit of every table found every table keyed and
 clustered, every foreign key enforced and indexed, no duplicate indexes, consistent names and no old
 data types. What it found, fixed:
 - `V040` column standards: an `ISJSON` check on the ten JSON columns that had none; emails 320
@@ -1047,7 +1087,7 @@ as 500s. Fix: set the status once, in `CreateResponse(status)`, and never after 
 `sales.POLine` and `sales.POImportRow` have filtered indexes, which need `QUOTED_IDENTIFIER ON`
 both when a procedure is *created* and when it runs. SqlClient and DbUp use ON,
 but `sqlcmd` defaults to OFF — so a procedure deployed by hand with `sqlcmd -i` (e.g. replaying
-`R__platform-procedures.sql` against a local database) fails on its first insert. Always pass
+an `R__platform-*.sql` file against a local database) fails on its first insert. Always pass
 `sqlcmd -I`, or simply run the migrator (`apply`), which re-runs every `R__` script (§7.1).
 
 ---
@@ -1095,7 +1135,8 @@ theoretical — every step here was actually run successfully before being writt
 
 | Tool | Version | Install |
 |---|---|---|
-| .NET SDK | 10.0.x | https://dotnet.microsoft.com/download — no `global.json` pins a specific SDK, any .NET 10 SDK works |
+| .NET SDK | 10.0.x | https://dotnet.microsoft.com/download — `global.json` asks for 10.0.100 or any newer 10.0 SDK (`rollForward: latestFeature`), and runs tests on Microsoft Testing Platform |
+| Node.js | 24 or 26 (LTS) | https://nodejs.org — for the UI; its pipeline uses 26 |
 | Azure Functions Core Tools | v4 | `npm install -g azure-functions-core-tools@4` |
 | Azurite (local storage emulator) | any recent | `npm install -g azurite`, then run `azurite` in its own terminal (or use the Azurite extension in VS Code) |
 | Docker Desktop | any recent | **Recommended** — gives you a fully isolated local database with no external dependency at all. See §15.2 Option A. |

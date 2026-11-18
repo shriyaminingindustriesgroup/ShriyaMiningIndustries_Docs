@@ -182,6 +182,7 @@
   <a href="#pipelines">Pipelines</a>
   <a href="#resources">Azure resources</a>
   <a href="#database">Database</a>
+  <a href="#stack">Tech stack</a>
   <a href="#auth">Auth</a>
   <a href="#cost">Cost</a>
   <a href="#debugging">Debugging</a>
@@ -211,7 +212,7 @@
   <h2>Architecture</h2>
   <p>The Static Web App's <strong>co-located</strong> Functions — not the standalone Function
   Apps — serve 100% of real traffic. Each SWA environment gets its own private copy of the API's
-  compiled build. The standalone Function Apps are kept deployed and healthy on purpose, as a
+  compiled build. The standalone Function Apps are kept, stopped (since 17 Nov 2026, not deleted), as a
   decouple-ready fallback (see <a href="https://github.com/shriyaminingindustriesgroup/ShriyaMiningIndustries_Docs/blob/main/ARCHITECTURE.md#9-decoupling-the-api-later-ifwhen-needed">ARCHITECTURE.md §9</a>).</p>
   <div class="mermaid">
 flowchart LR
@@ -267,7 +268,7 @@ flowchart LR
   <div class="mermaid">
 flowchart LR
     Push["push: main or test"] --> Test["test job<br/>restore, build, throwaway SQL Server<br/>built from the scripts, all tests"]
-    Test --> Migrate["migrate job<br/>open SQL firewall<br/>integration test (always vs TEST db)<br/>DbUp migration (branch DB)<br/>stored-proc publish (branch DB)<br/>close firewall"]
+    Test --> Migrate["migrate job<br/>open SQL firewall<br/>DbUp: new V### scripts once,<br/>every R__ script again (branch DB)<br/>close firewall"]
     Migrate --> Deploy["deploy job<br/>publish API<br/>GitHub Release (branch-prefixed tag)<br/>dispatch to UI repo"]
   </div>
   <h3>UI repo</h3>
@@ -319,6 +320,13 @@ flowchart LR
   provided", and repositories hand services typed errors (conflict, not found). Rules: one procedure
   or one transaction for anything all-or-nothing, no database call per item in a loop, one owner per
   table (<code>IAppSettings</code> for settings). ARCHITECTURE.md §7.4.</p>
+  <p><strong>Every query is a stored procedure (18 Nov):</strong> the API's C# holds no SQL text; about 55
+  queries moved from 15 repositories into procedures, each reading and writing exactly what it did, and
+  a test fails if SQL text reappears in the C#. The procedures are split <strong>one file per area</strong>
+  (<code>R__platform-00-shared</code>, <code>-10-invoices</code> … <code>-60-settings-logs</code>), instead
+  of one 2,700-line file. The standards review also added JSON checks, consistent column sizes,
+  <code>InvoiceDate</code> as a date (V040), and an invoice's PO numbers as rows in
+  <code>app.InvoicePurchaseOrder</code> instead of a list in one column (V041). ARCHITECTURE.md §7.1, §7.4, §7.6.</p>
   <p><strong>Tracking → Product</strong> groups PO lines on the SKU <em>without its delivery prefix</em>
   (<code>BED-GRNABSBLK1224FL</code> and <code>GRNABSBLK1224FL</code> are one product, with a chip per
   delivery place). The prefixes are the <code>itemStartsWith</code> values of the buyer's delivery rules,
@@ -351,6 +359,20 @@ flowchart LR
   (shipping reference) or reject (remarks), once, while the invoice is unchanged since it was sent; the
   decision moves the status through the normal rules, recorded as "Buyer email". Approved now needs only
   the shipment number; the container no. is needed from Ready to Ship. See ARCHITECTURE.md §7.2, §8.</p>
+</section>
+
+<section id="stack">
+  <h2>Tech stack</h2>
+  <p class="dim">Newest stable releases, checked against the package registries on 18 Nov 2026;
+  long-term-support lines where there is a choice. Full table with notes: ARCHITECTURE.md §2.</p>
+  <table>
+    <tr><th>Area</th><th>Version</th></tr>
+    <tr><td>API</td><td>.NET 10 (LTS), Azure Functions v4 isolated, Dapper 2.1, SqlClient 7.1, DbUp 7.2, MailKit 5</td></tr>
+    <tr><td>API tests</td><td>xUnit.net v3 (4.0) on Microsoft Testing Platform, FluentAssertions 7.2 (last Apache-2.0 line)</td></tr>
+    <tr><td>UI</td><td>Vue 3.5, vue-router 5, Vite 8 (Rolldown), Vitest 5, TypeScript 6.0 (vue-tsc can't run on TypeScript 7 yet)</td></tr>
+    <tr><td>Pipelines</td><td>Node 26 LTS for the UI; GitHub actions checkout v7, setup-dotnet v6, setup-node v7, azure/login v3; CI database SQL Server 2025</td></tr>
+    <tr><td>Database</td><td>Azure SQL Database (serverless)</td></tr>
+  </table>
 </section>
 
 <section id="auth">
