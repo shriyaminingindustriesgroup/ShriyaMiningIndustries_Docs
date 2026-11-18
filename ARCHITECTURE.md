@@ -694,6 +694,14 @@ History screen reads `InvoiceSnapshot`; status changes are in `InvoiceStatusChan
 stopped writing it, and `V037` removed the table. Its old rows repeated what those two tables hold; to
 see them, restore the database to a point in time before V037 ran (Azure keeps 7 days) as a new database.
 
+**Baseline indexes — fixed:** both live databases were set up with `seed-baseline`, which marked
+V001–V006 as run without running them, so 17 indexes those scripts create were never made (18 on
+production, which also lacked `UX_Vendor_OnlyOneActive`). Among them: no index on
+`InvoiceLine.InvoiceId`, and seven foreign key columns without one. `V038` creates each missing index
+with the same definition. A read-only comparison of each live database with one built from the scripts
+now shows only two leftovers: an old Entity Framework table `dbo.__MigrationHistory` and two
+constraints with system-made names (to decide).
+
 **Decided, not changed:**
 - Random GUID keys (`NEWID()` in the procedures): fragmentation is harmless at this size, and a
   `NEWSEQUENTIALID()` default would do nothing because the procedures make the ids themselves.
