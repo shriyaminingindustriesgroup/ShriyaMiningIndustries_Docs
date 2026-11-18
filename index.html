@@ -527,12 +527,14 @@ npm run dev</pre>
   This page and its Markdown source are kept in sync — update both when the architecture changes.
 </footer>
 
-<script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
-<script>
+<!-- Mermaid 12, loaded as an ES module (the form Mermaid recommends since v11), pinned to an exact
+     version. securityLevel 'strict' (the default): the diagrams need no click handlers or raw HTML. -->
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@12.3.0/dist/mermaid.esm.min.mjs';
   mermaid.initialize({
     startOnLoad: true,
     theme: window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'default',
-    securityLevel: 'loose'
+    securityLevel: 'strict'
   });
 </script>
 
