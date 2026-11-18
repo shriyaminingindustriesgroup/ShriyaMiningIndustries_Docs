@@ -780,9 +780,61 @@ data types. What it found, fixed:
   missing). Rules in the procedures (`R__platform-50-admin.sql`): disabling needs a reason; nobody can
   disable themselves; the last active Admin can't be disabled or removed (`ufn_IsLastActiveAdmin`);
   every create / restore / role change / status change / removal writes a `UserChange` row.
+- `V043` our own sign-in (Epic 2, password only): `security.UserPassword` (hash, failed count, lock),
+  `security.UserSession` (token hash, idle/absolute expiry, end reason), `security.UserLink` (single-use
+  emailed links: token hash, purpose, expiry, sent/used/revoked), the `ACCOUNT_EMAIL` service, `Account` as
+  an email-log kind, and the settings `AUTH_LOCK_AFTER` 5, `AUTH_LOCK_MINUTES` 15, `AUTH_LINK_MINUTES` 60,
+  `AUTH_ALLOW_PLATFORM_SIGN_IN` true. Procedures in `R__platform-55-accounts.sql`; C# in the new
+  `Modules.Accounts` project (no SQL or mail code: email goes through `IAccountMailer`, implemented by the API). §8.
 ---
 
 ## 8. Authentication & authorization
+
+**Our own sign-in (login plan Epic 2, V043, 18 Nov 2026; password only for now, plan decision D16).**
+During the changeover two sign-ins work side by side; the setting `AUTH_ALLOW_PLATFORM_SIGN_IN`
+(`app.AppSetting`, `true` by default) decides whether the old one (items 1–3 below) is still accepted.
+
+- **Pages:** `/sign-in` (email + password, *Forgot password?*, and *Sign in with Microsoft* while the
+  setting is true), `/set-password?token=…` (from an emailed link; the page removes the token from the
+  address bar), `/account` (change password, sign out everywhere, recent sign-ins). Admin → Users has
+  **Password link** (emails the person a link to set their password; an Admin never sees or sets one).
+  A first-time visitor is sent to `/sign-in`; *Forgot password* is also how someone sets their first password.
+- **Session:** a random 32-byte token in the cookie `smi_session` (HttpOnly, Secure, SameSite=Strict,
+  path `/`; the Static Web App adds `Domain=<site host>`, proved in Sprint 0). The database stores only
+  its SHA-256 (`security.UserSession`): idle 60 minutes (slid at most every 5 minutes), absolute 12
+  hours. Each API instance remembers a session for 30 seconds (`SessionCache`); roles and status are
+  still read on every call. Disable / remove / password change / *Sign out everywhere* end sessions.
+- **Passwords:** never stored. `security.UserPassword` holds PBKDF2-HMAC-SHA512 (210,000 rounds, 16-byte
+  salt, version and rounds in the hash so they can be raised) of HMAC-SHA256(**pepper**, password). The
+  pepper is the app setting **`AUTH_PASSWORD_PEPPER`** on each Static Web App environment (a secret: never
+  in a repo or the database; never change it once people have passwords). Without it, password sign-in
+  answers 503 "not set up" and `GET /api/auth/status` says `passwordSignIn: false`. Rules (NIST): 12–128
+  characters, not common, not the email name, not in a breach (Have I Been Pwned range check, free, only
+  5 hash characters leave the API; if unreachable, the local rules still apply). 5 wrong passwords lock
+  password sign-in for 15 minutes (Forgot password still works); 30 refusals from one address in 15
+  minutes slow that address down. A wrong password and an unknown email get the same words and take the
+  same time.
+- **Emailed links** (`security.UserLink`, only the token's SHA-256 stored, single use): Forgot password
+  (60 minutes, at most 5 an hour per person and 20 per address; the answer is the same whether or not the
+  email has an account) and an Admin's set-password link (7 days). Links are built only from the app's own
+  addresses (`SiteAddresses`: the two Static Web App hosts, plus `AUTH_SITE_URLS` for a custom domain),
+  never from the caller's Host or Origin. Sent by the **Account emails** service (`ACCOUNT_EMAIL`, Company
+  profile → Services; V043 copied the Email Alerts From address, so its mailbox login is reused), logged in
+  `app.EmailLog` as kind `Account`. On Test, `EMAIL_TEST_ALLOWLIST` still applies.
+- **CSRF:** a changing request that carries `smi_session`, or goes to `auth/*` / `me/*`, must send
+  `X-Requested-With: smi` (the UI's axios client always does) and, when sent, an Origin that is one of
+  the app's addresses.
+- **API:** `GET auth/status` · `POST auth/password` · `POST auth/sign-out` · `POST auth/password/forgot` ·
+  `GET auth/link?token=` · `POST auth/link/password` · `PUT me/password` · `POST me/sign-out-everywhere` ·
+  `GET me/sign-ins` · `POST console/users/{id}/password-link` (Admin). `/api/me` returns `signInMethod`
+  (`password` or `platform`) so Logout ends the right session. Every attempt is a `log.SignInEvent` row
+  (purged after a year; ended sessions after 30 days; links a day after they expire).
+- **Changeover (plan 02 §2.11):** on Test both sign-ins work; people set a password with *Forgot
+  password*. When everyone has one, set `AUTH_ALLOW_PLATFORM_SIGN_IN` to `false` (Test, then Production):
+  the API then ignores `x-ms-client-principal` entirely, which also closes the forged-header weakness in
+  item 3. Setting it back to `true` is the rollback.
+
+**Before Epic 2 (still accepted while `AUTH_ALLOW_PLATFORM_SIGN_IN` is true):**
 
 1. **The Static Web App's built-in Entra ID (AAD) auth** handles the actual login. No custom app
    registration is configured for this (the default, built-in multi-tenant SWA provider is used,

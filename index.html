@@ -333,6 +333,12 @@ flowchart LR
   turn off themselves or the last active Admin. A disabled person sees "Your access has been turned off".
   New tables for the coming sign-in: <code>SignInMethod</code>, <code>UserExternalLogin</code>,
   <code>UserChange</code>, <code>log.SignInEvent</code>. ARCHITECTURE.md §7.2, §7.6, §8.</p>
+  <p><strong>Our own sign-in, step 2 (18 Nov, V043; password only for now):</strong> a <em>Sign in</em> page with email and
+  password, <em>Forgot password</em> (an emailed single-use link, also how people set their first password), <em>My account</em>
+  (change password, sign out everywhere, recent sign-ins) and an Admin's <em>Password link</em>. Passwords are stored only as a
+  salted, peppered PBKDF2 hash (the pepper is a secret app setting); the session is an HttpOnly cookie whose hash is in
+  <code>security.UserSession</code>; 5 wrong passwords lock for 15 minutes. Today's Microsoft sign-in keeps working until the setting
+  <code>AUTH_ALLOW_PLATFORM_SIGN_IN</code> is switched off. ARCHITECTURE.md §8.</p>
   <p><strong>Tracking → Product</strong> groups PO lines on the SKU <em>without its delivery prefix</em>
   (<code>BED-GRNABSBLK1224FL</code> and <code>GRNABSBLK1224FL</code> are one product, with a chip per
   delivery place). The prefixes are the <code>itemStartsWith</code> values of the buyer's delivery rules,
