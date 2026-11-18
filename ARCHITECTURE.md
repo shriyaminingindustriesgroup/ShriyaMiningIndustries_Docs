@@ -699,8 +699,9 @@ V001–V006 as run without running them, so 17 indexes those scripts create were
 production, which also lacked `UX_Vendor_OnlyOneActive`). Among them: no index on
 `InvoiceLine.InvoiceId`, and seven foreign key columns without one. `V038` creates each missing index
 with the same definition. A read-only comparison of each live database with one built from the scripts
-now shows only two leftovers: an old Entity Framework table `dbo.__MigrationHistory` and two
-constraints with system-made names (to decide).
+(tables, columns with type/length/null, indexes, constraints) then showed only `dbo.__MigrationHistory`,
+left by a migration runner used before DbUp, with its two system-named defaults; nothing used it, and
+`V039` dropped it. Test, production and a database built from empty now have the same structure.
 
 **Decided, not changed:**
 - Random GUID keys (`NEWID()` in the procedures): fragmentation is harmless at this size, and a
