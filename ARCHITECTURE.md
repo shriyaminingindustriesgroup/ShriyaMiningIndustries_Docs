@@ -812,6 +812,15 @@ invariant culture for numbers and dates written into files); cancellation tokens
 reused. Every rule switched down in `.editorconfig` says why. Guard tests add the rules analyzers can't
 check: no SQL in C#, every foreign key indexed, all-or-nothing procedures (§7.3), cookie rules (§8).
 
+**Modules (split 19 Nov 2026):** **Invoice** (invoices, POs: import, tracking, edits; old invoices; container
+fit; the invoice review by email and buyers' contact lists), **MasterData** (buyers and their addresses,
+company profile, delivery rules, the master-data lists), **Notifications** (email senders for Zoho SMTP and
+Microsoft 365, settings, the services on Company profile → Services, the email log, buyer contact storage),
+**Admin** (users, roles, error and payload logs, Health) and **Accounts** (sign-in). Dependencies point one
+way: Invoice uses MasterData and Notifications; MasterData and Notifications use only `Shared`; the API's
+`Adapters/AccountMailer` connects Accounts to Notifications. Each module registers itself (`Add<Module>Module`)
+and its endpoints live in `Api/Functions/<Module>`.
+
 **Folders:** `Modules/<Area>/{Abstractions, Application, Contracts, Domain, Infrastructure}`; the `Api`
 project holds only `Functions/<area>` (HTTP endpoints, thin), `Middleware` and `Adapters` (bridges between
 modules, e.g. `AccountMailer`); `Shared.Kernel` has no database code, `Shared.Data` is the only database
