@@ -280,6 +280,17 @@ flowchart LR
     Download --> DeployProd["Deploy — production environment"]
     Download --> DeployTest["Deploy — test environment"]
   </div>
+  <h3>Test-data refresh (API repo, 19 Nov 2026)</h3>
+  <div class="mermaid">
+flowchart LR
+    Timer["daily timer 02:30 UTC<br/>or Run workflow (on demand)"] --> Decide["decide job<br/>schedule / pause variables<br/>(on demand always runs)"]
+    Decide -->|due| Check["safety checks<br/>target ends in 'test', source read-only,<br/>every table has a rule"]
+    Check --> Copy["one transaction on test:<br/>read production at one moment,<br/>replace business tables, check counts"]
+    Copy --> Record["record the run<br/>(ops.DataRefreshRun, run summary)"]
+  </div>
+  <p class="dim">Copies business data only; test keeps its own users, sign-in, settings and logs. A failure leaves test
+  unchanged. Pause with <code>TEST_REFRESH_SCHEDULE=off</code> or <code>TEST_REFRESH_PAUSE_UNTIL</code>.
+  Status: built and tested against two local databases; the first real run follows the owner's identity setup.</p>
   <p class="dim">Full step-by-step detail, including the exact gotchas each pipeline has hit, is in
   <a href="https://github.com/shriyaminingindustriesgroup/ShriyaMiningIndustries_Docs/blob/main/ARCHITECTURE.md#6-cicd-pipelines">ARCHITECTURE.md §6</a>.</p>
 </section>
@@ -419,6 +430,7 @@ flowchart LR
     <li>SWA Free tier — co-located Functions chosen specifically so Standard tier (~$9/mo) isn't needed.</li>
     <li>Functions Consumption plan — 1M executions + 400,000 GB-s free per month, <em>per subscription</em>, shared across both Function Apps.</li>
     <li>Both SQL databases have the Azure SQL free offer applied — 100,000 vCore-seconds + 32GB free per database per month, for the life of the subscription.</li>
+    <li>Test-data refresh — GitHub Actions minutes within the free allowance; the databases are awake only while it runs.</li>
   </ul>
   <p class="dim">Full breakdown in <a href="https://github.com/shriyaminingindustriesgroup/ShriyaMiningIndustries_Docs/blob/main/ARCHITECTURE.md#10-cost-model">ARCHITECTURE.md §10</a>.</p>
 </section>
@@ -436,6 +448,8 @@ flowchart LR
     <li><strong>Uptime check</strong> every hour (Docs repo workflow): <code>/api/ping</code> and the sign-in page only, so the
     database is never woken.</li>
     <li><strong>Which build is live:</strong> <code>/api/ping</code> and the app's footer show the commit and environment.</li>
+    <li><strong>Test data from production:</strong> the <em>Refresh test data from production</em> workflow (API repo), on a
+    schedule or on demand; runbook in ARCHITECTURE.md §12.2.</li>
   </ul>
 </section>
 

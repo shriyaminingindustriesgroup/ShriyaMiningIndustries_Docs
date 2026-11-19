@@ -157,6 +157,7 @@ one Azure subscription.
 | Smoke test after every deploy (Phase 3) | UI repo `scripts/smoke-test.sh`, last step of the deploy workflow | — | Waits until the live site answers with the new API build, then checks the pages load, sign-out's cookie gets through the Static Web App (`max-age=0`), the CSRF check refuses a request without the app's header, and admin data refuses a stranger. No sign-in, no database, nothing changed. A failure turns the deploy red (GitHub emails it). Would have caught both cookie bugs of 18 Nov 2026. |
 | Uptime check (Phase 3) | Docs repo `.github/workflows/uptime.yml`, hourly at :17 | — | Production and test: `/api/ping` (no database: never wakes or bills it) and the sign-in page, one retry after 30 s. In the public Docs repo because Actions minutes are free there. A red run is emailed to whoever last changed the schedule. |
 | Build stamp | `/api/ping`, `/api/health`, the app's footer | — | Each API build carries its commit (`-p:SourceRevisionId`) and works out its environment from the database name; the UI build carries its own (`GITHUB_SHA`). `/api/ping` reports both without touching the database. |
+| Test-data refresh (19 Nov 2026) | API repo `.github/workflows/refresh-test-data.yml`, tool `src/ShriyaMiningIndustries.DataRefresh` | — | Copies production's business data into the test database on a schedule or on demand (§6.3). Signs in with its **own** Entra identity (GitHub OIDC, protected environment `test-refresh`, `main` only): read-only in production, writes only the business tables in test, and a custom role that can only add and remove firewall rules on this SQL server. Runs recorded in `ops.DataRefreshRun` (test). |
 | Budget | `ShriyaMining-Monthly` | $20 / month, subscription | Emails at 50% and 80% of actual cost and at 100% forecast. Added when the production database moved to pay as you go (2026-11-17). Free. |
 
 The first two alert rules were added specifically to close a real gap: before they existed,
@@ -255,6 +256,36 @@ Key points worth knowing when debugging this pipeline:
 - **The SWA deployment token** (`AZURE_STATIC_WEB_APPS_API_TOKEN` secret, this repo) is the one
   credential that, if rotated or regenerated in Azure, needs to be re-copied here by hand — it's
   not something either pipeline can self-heal.
+
+### 6.3 Test-data refresh (API repo) — `.github/workflows/refresh-test-data.yml` (19 Nov 2026)
+
+Replaces the test database's business data with production's, so testing happens on real-shaped data.
+Full design and decisions: the plan `plan/test-data-refresh` (kept with the owner); developer notes in its 06.
+
+- **When:** a timer fires daily at 02:30 UTC (08:00 IST). A small *decide* job (no secrets) reads the API repo's
+  Actions variables and stops unless a run is due: `TEST_REFRESH_SCHEDULE` = `off` · `daily` · `weekly:SUN` (any
+  day) · `monthly:1` (day 1–28); `TEST_REFRESH_PAUSE_UNTIL` = empty or `YYYY-MM-DD`; `TEST_REFRESH_MODE` = `full`
+  (delta later). **Pause:** schedule `off` (indefinitely) or a pause date. **On demand:** Actions → *Refresh test
+  data from production* → Run workflow (or `gh workflow run refresh-test-data.yml -f dry_run=true`); on demand
+  always runs, even when paused. One refresh at a time (concurrency group).
+- **What:** `database/refresh/tables.json` gives **every** table `copy` or `keep`. Copied: the business tables
+  (`app`, `sales`) except settings, mail-service settings and the email log. Kept: all of `security` (test's own
+  users and sign-in; production's passwords and sessions never leave production), `log`, `ops`, the migration
+  journal. A table without a rule stops the run, and a test (`DataRefreshTests.EveryTable_HasASafeRule`)
+  fails the build first.
+- **How:** the tool reads production in one SNAPSHOT transaction (one point in time) and replaces test's copied
+  tables in **one transaction**: checks off, rows deleted (children first), streamed bulk copy keeping identity
+  values (parents first), constraints validated `WITH CHECK`, row counts compared with the snapshot, commit. Any
+  failure rolls back: test is exactly as it was. Columns are the ones both databases have, so test may be a
+  release ahead (its new columns need defaults; the tool says which).
+- **Safety checks before anything changes:** the target's name must end in `test` and differ from the source;
+  the source must be read-only for the identity and allow SNAPSHOT; every table classified; no foreign key between
+  a copied and a kept table. Exit codes: 0 done / dry run, 1 failed (test unchanged), 2 not run (a check failed).
+- **Logs** show table names and row counts only. The run's summary is on the workflow page and in
+  `ops.DataRefreshRun` (test).
+- **Status (19 Nov 2026):** built and tested against two databases built from the migrations (locally and in CI:
+  full copy, rollback on failure, dry run, every table classified). **Not yet run against the real databases**:
+  that follows the owner's setup of the identity, its database users and the GitHub environment, then a dry run.
 
 ---
 
@@ -863,6 +894,12 @@ the build and tests; the rest is reviewed. Each rule exists because of a real pr
   goes before a `WITH … AS (…)` block). A test enforces both (§7.3).
 - [ ] Names `PK_/FK_/UQ_/UX_/IX_/CK_/DF_<Table>_<Column>`; every foreign key indexed (a test checks);
   normalized tables; changes an Admin makes to people are history rows.
+- [ ] A **new table gets a rule** in `database/refresh/tables.json` (`copy` from production, or `keep` test's
+  own), and a new NOT NULL column gets a default (test may be a release ahead of production during a refresh).
+  A test fails otherwise (§6.3).
+- [ ] No dynamic SQL in procedures (a test fails). The one reviewed exception is the test-data refresh's
+  `R__platform-70-data-refresh.sql`: it works on any table, so names are matched against the catalog and
+  passed through `QUOTENAME`; the test allows only that file and refuses any name joined in unquoted.
 
 **API (C#)**
 - [ ] Builds with **0 warnings** (analyzers and code style are errors). Culture-safe text (ordinal
@@ -1082,6 +1119,7 @@ max 1–2 hours/day), verified against real Azure pricing rather than assumed:
 | SQL Databases (both) | Azure SQL free offer applied (`useFreeLimit: true`, confirmed via `az sql db show`): 100,000 vCore-seconds + 32GB storage free per database per month, for the life of the subscription. At 0.5 vCore minimum, that's ≈55.6 hours of active compute free per database per month — comfortably covers the stated 1–2 hrs/day ceiling. Default behavior on exceeding the limit is auto-pause, not a surprise bill. |
 | Application Insights | Shared single instance across all four API deployments rather than one per environment — avoids multiplying ingestion volume for no benefit at this telemetry volume. |
 | This docs site (GitHub Pages) | Free for a public repo. |
+| Test-data refresh (§6.3) | GitHub Actions minutes in the private API repo (a ~1-minute check each day plus the run itself), inside the free monthly minutes. While it runs, both databases are awake: a weekly run uses a small part of each database's free 100,000 vCore-seconds; after the allowance, the same pay-as-you-go rate as any other use. Nothing runs between refreshes. |
 
 **Known cost risk, not a concern today:** the Functions execution grant is subscription-wide, not
 per-app — if usage grows substantially (more apps, much higher traffic), that shared pool is the
@@ -1307,6 +1345,15 @@ so far; Application Insights *Usage and estimated costs*; the uptime check's las
 
 **Targets** (shown on Health, tested in the UI's `services/health.ts`): no server errors (or under 1% once
 there are 100+ logged requests); nobody locked out right now; account and invoice emails at least 99% sent.
+
+### 12.2 Test-data refresh runbook (19 Nov 2026)
+
+| Situation | What to do |
+|---|---|
+| A refresh run failed (GitHub emails a red run) | Test is unchanged (one transaction). Open the run: the summary says why. *Not run* (exit 2) lists the failed safety check, e.g. a new table without a rule in `tables.json`, or a test-only NOT NULL column without a default: fix in the API repo, then Run workflow again. *Failed* (exit 1): often the serverless wake-up (§12 cold start): just run it again. |
+| Testers need data from today | Actions → *Refresh test data from production* → Run workflow (tick *dry run* first if unsure). Tell testers: their changes in test's business data are replaced. |
+| Stop refreshes for a while | Set `TEST_REFRESH_PAUSE_UNTIL` to the first day it may run again; or `TEST_REFRESH_SCHEDULE` = `off` to stop until switched back. On demand still works. |
+| "When was test last refreshed?" | The workflow's run list, or `ops.DataRefreshRun` in the test database (newest first: outcome, tables, rows, the snapshot time). |
 
 ---
 
