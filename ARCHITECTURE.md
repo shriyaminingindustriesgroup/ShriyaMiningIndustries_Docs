@@ -800,7 +800,41 @@ data types. What it found, fixed:
   emailed links: token hash, purpose, expiry, sent/used/revoked), the `ACCOUNT_EMAIL` service, `Account` as
   an email-log kind, and the settings `AUTH_LOCK_AFTER` 5, `AUTH_LOCK_MINUTES` 15, `AUTH_LINK_MINUTES` 60,
   `AUTH_ALLOW_PLATFORM_SIGN_IN` true. Procedures in `R__platform-55-accounts.sql`; C# in the new
-  `Modules.Accounts` project (no SQL or mail code: email goes through `IAccountMailer`, implemented by the API). §8.
+  `Modules.Accounts` project (no SQL or mail code: email goes through `IAccountMailer`, implemented by `Api/Adapters/AccountMailer`). §8.
+
+### 7.7 Coding standards and API conventions (18 Nov 2026)
+
+**Enforced by the build** (API repo, `Directory.Build.props` + `.editorconfig`): the recommended .NET
+analyzers, code style in the build, and **warnings as errors** (package security advisories stay warnings
+so a newly published one doesn't block deploys). File-scoped namespaces, no unused `using`s, no `this.`,
+`string`/`int` not `String`/`Int32`; culture-safe comparisons and formatting (ordinal for fixed markers,
+invariant culture for numbers and dates written into files); cancellation tokens passed on; JSON options
+reused. Every rule switched down in `.editorconfig` says why. Guard tests add the rules analyzers can't
+check: no SQL in C#, every foreign key indexed, all-or-nothing procedures (§7.3), cookie rules (§8).
+
+**Folders:** `Modules/<Area>/{Abstractions, Application, Contracts, Domain, Infrastructure}`; the `Api`
+project holds only `Functions/<area>` (HTTP endpoints, thin), `Middleware` and `Adapters` (bridges between
+modules, e.g. `AccountMailer`); `Shared.Kernel` has no database code, `Shared.Data` is the only database
+access. Comments that explain behaviour copied from the retired Node API say "the old Node API".
+
+**API conventions** (every new endpoint; existing ones follow them since 18 Nov 2026):
+- **Routes:** lower-case, plural nouns (`console/users/{id}`); never the word `admin` (the Functions host
+  reserves it: use `console`). Reading is `GET`; creating `POST`; replacing `PUT`; partial changes `PATCH`;
+  removing `DELETE`. A **command that isn't a field change** gets a verb segment with `POST`
+  (`…/disable`, `…/enable`, `…/password-link`, `…/temporary-password`).
+- **Paged lists** always answer `{ items, total, pagination: { page, pageSize, totalCount, totalPages } }`
+  (`PagedResponse<T>` in `Shared.Kernel`), with `page` (from 1) and `pageSize` query parameters and the
+  filters as query parameters. A list with extra information (PO tracking's status counts) adds fields
+  beside these three. The UI reads the old names (`users`, `errors`, `invoices`, `imports`) for one release
+  (`paged()` in `api.ts`); remove that after 2026-12-01.
+- **Errors:** always `{ error: { code, message, referenceId, timestamp } }` with a stable code
+  (`AREA-THING-STATUS`, e.g. `AUTH-SIGNIN-401`) and a message written for the person reading it. Status codes:
+  400 input, 401 not signed in, 403 not allowed (or CSRF), 404 not found, 409 conflict (including a stale
+  `rowVersion`), 429 too many attempts, 503 not set up / database waking.
+- **Concurrency:** anything edited on a screen carries `rowVersion`; a stale one answers 409 with what to do.
+- **JSON:** camelCase; dates in UTC ISO 8601; no new duplicate aliases of the same value.
+- **Versioning:** none yet: the only client (the UI) deploys with the API. Add `/v1` before a second client
+  (e.g. a mobile app) ships.
 ---
 
 ## 8. Authentication & authorization
