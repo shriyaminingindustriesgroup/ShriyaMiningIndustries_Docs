@@ -7,9 +7,11 @@ start to finish should be enough to understand how the system fits together, mak
 safely, and debug a real incident. Keep it current: when you change something architectural,
 update this file in the same session, not "later."
 
-**Last substantially updated:** 2026-11-10, after closing out the final-review punch list
-(UI test coverage, monitoring alerts, rollback runbook, API repo made private, Docker-based local
-dev) and fixing a real migration run-order bug found while verifying the last of those.
+**Last substantially updated:** 2026-11-19: our own sign-in (§8: password sign-in, temporary passwords),
+operations and observability (Health page, alerts, smoke tests, uptime check, §5 and §12.1), all-or-nothing
+procedures (§7.3), the role cache (§8), enforced coding standards and API conventions (§7.7), the module
+split (§7.7) and the **checklist every change follows (§7.8)**. Earlier: 2026-11-10, the final-review punch
+list (UI test coverage, monitoring alerts, rollback runbook, API repo private, Docker-based local dev).
 
 ---
 
@@ -844,6 +846,54 @@ access. Comments that explain behaviour copied from the retired Node API say "th
 - **JSON:** camelCase; dates in UTC ISO 8601; no new duplicate aliases of the same value.
 - **Versioning:** none yet: the only client (the UI) deploys with the API. Add `/v1` before a second client
   (e.g. a mobile app) ships.
+
+### 7.8 Checklist for every change (the standard, 19 Nov 2026)
+
+Every enhancement or fix, by anyone (people or AI sessions), follows this list. Most of it is enforced by
+the build and tests; the rest is reviewed. Each rule exists because of a real problem found in this system.
+
+**Database**
+- [ ] Every query is a stored procedure (no SQL text in C#: a test fails). Parameters `NVARCHAR(MAX)` so
+  overlong input fails (2628) instead of being cut; JSON lists read `WITH (value NVARCHAR(4000) '$')`;
+  a conflict returns a status the C# turns into a 409.
+- [ ] Schema changes in a new `V###` script (runs once, safe to re-run); procedures in the area's one
+  `R__platform-NN-area.sql` file (each procedure in exactly one file). Proven on an **empty database and a
+  re-run** (`sqlcmd -I` when running by hand).
+- [ ] A procedure that writes sets `XACT_ABORT ON`; several writes are one transaction (`BEGIN TRANSACTION`
+  goes before a `WITH … AS (…)` block). A test enforces both (§7.3).
+- [ ] Names `PK_/FK_/UQ_/UX_/IX_/CK_/DF_<Table>_<Column>`; every foreign key indexed (a test checks);
+  normalized tables; changes an Admin makes to people are history rows.
+
+**API (C#)**
+- [ ] Builds with **0 warnings** (analyzers and code style are errors). Culture-safe text (ordinal
+  comparisons, invariant numbers and dates in files), cancellation tokens passed on, JSON options reused.
+- [ ] The right module (§7.7): Invoice may use MasterData and Notifications, never the reverse; service →
+  repository → procedure; the module registers its own services; endpoints in `Api/Functions/<Module>`,
+  cross-module bridges in `Api/Adapters`.
+- [ ] API conventions (§7.7): routes under `console/` (never `admin`), paged lists as `{ items, total,
+  pagination }`, the one error envelope with a stable code and plain-words message, `rowVersion` → 409.
+- [ ] Security: secrets only in app settings (never in a repo or these public docs); tokens stored hashed;
+  changing requests carry `X-Requested-With: smi`; cookies use **Max-Age only (never Expires)** and are set
+  **before** the response body (§8); no test-only endpoint answers in production.
+- [ ] A new failure that matters gets an error code (Error logs) and, if people need telling, a metric and
+  an alert (§12.1).
+
+**UI (Vue)**
+- [ ] Calls go through the shared API client (it adds the CSRF header and reads paged lists); font sizes
+  from the theme tokens (a test checks) and colours from the theme too; every screen says what's happening (loading, empty,
+  error) instead of going blank.
+- [ ] `npm run type-check`, `npm run test` and `npm run build` pass.
+
+**Tests and release**
+- [ ] New behaviour has tests: procedures against a real database (`Repositories.Tests`), rules as unit tests.
+- [ ] Full check before pushing: build, fresh database migrated twice, every test.
+- [ ] Commit per story; fetch and rebase first (another session pushes to the same branches); push **test**
+  first and watch its smoke test; **production only on the owner's go-ahead**. When the API and UI change
+  together, release the side that accepts both shapes first.
+- [ ] Cost: $0 unless agreed; prices from the Azure Retail Prices API before adding anything; no keep-alive
+  calls to the database.
+- [ ] Docs in the same session: this file (and its §7.8 if a new rule is learned) and `index.html`.
+
 ---
 
 ## 8. Authentication & authorization
@@ -1227,6 +1277,13 @@ both when a procedure is *created* and when it runs. SqlClient and DbUp use ON,
 but `sqlcmd` defaults to OFF — so a procedure deployed by hand with `sqlcmd -i` (e.g. replaying
 an `R__platform-*.sql` file against a local database) fails on its first insert. Always pass
 `sqlcmd -I`, or simply run the migrator (`apply`), which re-runs every `R__` script (§7.1).
+
+**Signed in, but the app shows the sign-in page again with no error (18 Nov 2026).** Two Static Web App
+behaviours, both fixed: (1) a cookie appended after `WriteAsJsonAsync` is silently lost (the headers have
+already gone): set cookies **before** the body; (2) the platform removes any `Set-Cookie` with an `Expires`
+attribute: use `Max-Age` only (`Max-Age=0` to clear). Check from outside: `POST /api/auth/sign-out` with
+`X-Requested-With: smi` must return `set-cookie: smi_session=…; max-age=0` (the deploy smoke test does this).
+`SessionCookieOrderTests` guards both rules.
 
 ### 12.1 Alert runbook (Operations plan, Phase 4, 18 Nov 2026)
 

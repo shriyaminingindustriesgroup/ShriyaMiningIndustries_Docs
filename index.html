@@ -185,6 +185,7 @@
   <a href="#stack">Tech stack</a>
   <a href="#auth">Auth</a>
   <a href="#cost">Cost</a>
+  <a href="#operations">Operations</a>
   <a href="#debugging">Debugging</a>
   <a href="#local-dev">Local dev</a>
   <a href="#rollback">Rollback</a>
@@ -339,6 +340,16 @@ flowchart LR
   salted, peppered PBKDF2 hash (the pepper is a secret app setting); the session is an HttpOnly cookie whose hash is in
   <code>security.UserSession</code>; 5 wrong passwords lock for 15 minutes. Today's Microsoft sign-in keeps working until the setting
   <code>AUTH_ALLOW_PLATFORM_SIGN_IN</code> is switched off. ARCHITECTURE.md §8.</p>
+  <p><strong>Temporary passwords (18 Nov, V044):</strong> an Admin can give someone a random password (shown once, stored only as a
+  hash, 72 hours); signing in with it opens only <em>Choose your password</em> until the person sets their own. ARCHITECTURE.md §8.</p>
+  <p><strong>All-or-nothing procedures (18 Nov):</strong> every procedure that writes sets <code>XACT_ABORT ON</code> and puts several
+  writes in one transaction, so a failure half way can't save half a change; a test enforces it. ARCHITECTURE.md §7.3.</p>
+  <p><strong>Role cache (18 Nov):</strong> a person's roles and permissions are kept 30 seconds per API instance instead of being read
+  on every call; any Admin change clears it. ARCHITECTURE.md §8.</p>
+  <p><strong>Coding standards and module split (18-19 Nov):</strong> the build enforces the .NET analyzers and code style with
+  warnings as errors; every paged list answers <code>{ items, total, pagination }</code>; the Invoice module was split into
+  <em>Invoice</em>, <em>MasterData</em> and <em>Notifications</em> (dependencies one way). Every change follows the
+  <strong>checklist in ARCHITECTURE.md §7.8</strong>. ARCHITECTURE.md §7.7, §7.8.</p>
   <p><strong>Tracking → Product</strong> groups PO lines on the SKU <em>without its delivery prefix</em>
   (<code>BED-GRNABSBLK1224FL</code> and <code>GRNABSBLK1224FL</code> are one product, with a chip per
   delivery place). The prefixes are the <code>itemStartsWith</code> values of the buyer's delivery rules,
@@ -389,11 +400,13 @@ flowchart LR
 
 <section id="auth">
   <h2>Authentication &amp; authorization</h2>
-  <p>Login goes through the Static Web App's built-in Entra ID auth — no custom app registration.
-  SWA injects an <code>x-ms-client-principal</code> header on every authenticated request; the
-  API's middleware decodes it and looks up roles/permissions <strong>by email</strong> against
-  <code>security.User</code>. Logging in via AAD always succeeds if your identity is valid — you
-  get zero permissions until your email exists as an active row with a role assigned. There is no
+  <p><strong>Our own sign-in (since 18 Nov 2026):</strong> email and password on <code>/sign-in</code>, <em>Forgot password</em> by
+  emailed link, Admin <em>Password link</em> and <em>Temporary password</em>; the session is an HttpOnly, SameSite=Strict cookie
+  (<code>smi_session</code>, stored only as a hash); changing requests must send <code>X-Requested-With: smi</code>. Cookies use
+  Max-Age only and are set before the response body (the Static Web App drops anything else).</p>
+  <p><strong>During the changeover</strong> today's Microsoft sign-in still works (setting <code>AUTH_ALLOW_PLATFORM_SIGN_IN</code>):
+  SWA injects an <code>x-ms-client-principal</code> header and the API looks up roles/permissions <strong>by email</strong> against
+  <code>security.User</code>. Either way you get zero permissions until your email is an <em>Active</em> user with a role. There is no
   self-service bootstrap for the first admin user; it's created directly via SQL (see
   <a href="https://github.com/shriyaminingindustriesgroup/ShriyaMiningIndustries_Docs/blob/main/ARCHITECTURE.md#8-authentication--authorization">ARCHITECTURE.md §8</a> for the exact script).</p>
 </section>
@@ -410,8 +423,30 @@ flowchart LR
   <p class="dim">Full breakdown in <a href="https://github.com/shriyaminingindustriesgroup/ShriyaMiningIndustries_Docs/blob/main/ARCHITECTURE.md#10-cost-model">ARCHITECTURE.md §10</a>.</p>
 </section>
 
+<section id="operations">
+  <h2>Operations</h2>
+  <p>Everything here is free (Application Insights used 0.56 GB of its free 5 GB a month on 18 Nov; daily cap 0.3 GB).</p>
+  <ul>
+    <li><strong>Admin → Health:</strong> tiles for 24 hours / 7 days / 30 days with targets (green or amber), every sign-in and every
+    email with the mail server's answer. From the app's own logs.</li>
+    <li><strong>Alerts</strong> (email, 6 metric rules): exception spike, failed requests, invoice email all failed, account email
+    failed, sign-in locked, refused sign-ins burst. What to do for each: ARCHITECTURE.md §12.1.</li>
+    <li><strong>Every deploy checks itself:</strong> <code>scripts/smoke-test.sh</code> (UI repo) runs against the live site
+    (pages, the sign-in cookie, CSRF, admin protection, test-only endpoint closed in production).</li>
+    <li><strong>Uptime check</strong> every hour (Docs repo workflow): <code>/api/ping</code> and the sign-in page only, so the
+    database is never woken.</li>
+    <li><strong>Which build is live:</strong> <code>/api/ping</code> and the app's footer show the commit and environment.</li>
+  </ul>
+</section>
+
 <section id="debugging">
   <h2>Debugging playbook</h2>
+
+  <div class="gotcha">
+    <strong>Signed in, but the sign-in page comes back with no error.</strong> The Static Web App drops a
+    <code>Set-Cookie</code> that has <code>Expires</code>, and a cookie set after the response body started is lost: use
+    Max-Age only and set cookies first. See ARCHITECTURE.md §12.
+  </div>
 
   <div class="gotcha">
     <strong>"degraded" health / Error 40613 against SQL.</strong> Serverless auto-pause after 60
