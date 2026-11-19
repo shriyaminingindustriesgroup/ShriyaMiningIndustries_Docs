@@ -834,6 +834,17 @@ data types. What it found, fixed:
   an email-log kind, and the settings `AUTH_LOCK_AFTER` 5, `AUTH_LOCK_MINUTES` 15, `AUTH_LINK_MINUTES` 60,
   `AUTH_ALLOW_PLATFORM_SIGN_IN` true. Procedures in `R__platform-55-accounts.sql`; C# in the new
   `Modules.Accounts` project (no SQL or mail code: email goes through `IAccountMailer`, implemented by `Api/Adapters/AccountMailer`). §8.
+- `V047` (19 Nov 2026) the **Loading agent** service (`LOADING_AGENT`, a system service; From copied from
+  `INVOICE_EMAIL`, so that mailbox login is reused; To/CC entered in Company profile → Services) and
+  `LoadingPlan` as an email-log kind. The container fit's **Loading plan** is a picture plan for loaders who
+  don't read English (wall, doors, sides by colour, each spot's steps and stack picture, a checklist with each
+  crate from above with its two measurements, the invoice / container no. / shipping reference at the top);
+  spots are the fit check's own stacks (`loadingSpots`). The **Fit** tab shows the same map, a ✓/✗ card,
+  crates that don't fit in red with their size and the reason as a picture, and the rules as pictures; the
+  office figures, table and numbered top view are under Details. **Email to loading agent** builds a PDF of
+  the plan in the browser (`loading-plan-pdf.ts`, html2canvas + jsPDF like the invoice PDF; the header line on
+  every page) and `POST invoices/{id}/loading-plan-email` (`LoadingPlanEmailService`, invoice.send) sends it
+  from the Loading agent service, logged as `LoadingPlan`; on test the allow-list applies.
 
 ### 7.7 Coding standards and API conventions (18 Nov 2026)
 
