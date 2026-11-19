@@ -110,7 +110,7 @@ decoupling steps.
 | | Production | Test |
 |---|---|---|
 | Trigger branch | `main` | `test` |
-| UI URL | `https://gray-meadow-0ebc61d10.6.azurestaticapps.net` | `https://gray-meadow-0ebc61d10-test.centralus.6.azurestaticapps.net` |
+| UI URL | the company's own domain, app under `/invoices` (19 Nov 2026; host kept out of these public docs); still `https://gray-meadow-0ebc61d10.6.azurestaticapps.net/invoices/` | `https://gray-meadow-0ebc61d10-test.centralus.6.azurestaticapps.net/invoices/` (a custom domain needs its own Static Web App: preview environments can't have one) |
 | SWA environment name | `default` | `test` |
 | Database | `shriyaminingdb` | `shriyaminingdbtest` |
 | Standalone Function App | `ShriyaMiningIndustries-api` | `ShriyaMiningIndustries-api-test` |
@@ -965,7 +965,8 @@ During the changeover two sign-ins work side by side; the setting `AUTH_ALLOW_PL
 - **Emailed links** (`security.UserLink`, only the token's SHA-256 stored, single use): Forgot password
   (60 minutes, at most 5 an hour per person and 20 per address; the answer is the same whether or not the
   email has an account) and an Admin's set-password link (7 days). Links are built only from the app's own
-  addresses (`SiteAddresses`: the two Static Web App hosts, plus `AUTH_SITE_URLS` for a custom domain),
+  addresses (`SiteAddresses`: the Static Web App hosts and the company domains, plus `AUTH_SITE_URLS`), as
+  site + `/invoices` (`SitePaths.App`, 19 Nov 2026) + page,
   never from the caller's Host or Origin. Sent by the **Account emails** service (`ACCOUNT_EMAIL`, Company
   profile → Services; V043 copied the Email Alerts From address, so its mailbox login is reused), logged in
   `app.EmailLog` as kind `Account`. On Test, `EMAIL_TEST_ALLOWLIST` still applies.
@@ -1383,7 +1384,12 @@ the app.
 ## 14. Open items / not yet done
 
 - Key Vault centralization for the SQL password (§11) — architecture decided, not yet built.
-- No custom domain configured for either SWA environment (default Azure-issued domains only).
+- Custom domain (19 Nov 2026): the app is built under `/invoices` (Vite `base`, output `dist/invoices`; `site-root/`
+  holds `staticwebapp.config.json` and the site root page: "Page not found" on the company domain, a move to
+  `/invoices/` on the azurestaticapps.net host; old paths move under `/invoices` there too). The DNS CNAME and
+  the portal's Custom domains step are done by the owner. Test can't take a custom domain while it is a
+  preview environment of the production Static Web App (Microsoft: "Custom domains do not work with preview
+  environments").
 - SWA app setting support for Key Vault references not yet empirically verified.
 - Azure AD admin not yet configured on the SQL server (blocks passwordless/Managed Identity SQL
   auth, §11's longer-term plan).
