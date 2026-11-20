@@ -878,6 +878,12 @@ data types. What it found, fixed:
   Ids, delivery location, history), with a text record of what was entered as its document (`Layout` `Manual`,
   `text/plain`). A PO number the buyer already has is refused. V050 also undoes V049 (orders sent as text, tried on
   test and reverted): `Text` buyers become `Manual`.
+- `V053` (20 Nov 2026) **Email copy** from the invoice preview: the invoice to the buyer for reference, with no
+  approval link, no review request and no status change (`GET|POST invoices/{id}/copy-email`, invoice.send). Only a
+  saved invoice (the button says "Save first" otherwise), so the copy matches the app. Same popup as Send for approval
+  in copy mode: To/CC/BCC from the buyer's list, the invoice PDF, photos, and **Add loading document**: the loading
+  plan PDF drawn off-screen from the saved fit report ("Check container fit first" when there's none). Wording from
+  the `InvoiceCopy` email template (Company profile → Email settings); logged as email-log kind `InvoiceCopy`.
 
 ### 7.7 Coding standards and API conventions (18 Nov 2026)
 
