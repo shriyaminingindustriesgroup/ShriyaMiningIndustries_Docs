@@ -884,6 +884,11 @@ data types. What it found, fixed:
   in copy mode: To/CC/BCC from the buyer's list, the invoice PDF, photos, and **Add loading document**: the loading
   plan PDF drawn off-screen from the saved fit report ("Check container fit first" when there's none). Wording from
   the `InvoiceCopy` email template (Company profile → Email settings); logged as email-log kind `InvoiceCopy`.
+- **Delivery column without delivery rules (20 Nov 2026, no migration):** the Invoices list's Delivery is the
+  invoice's PO lines' delivery location; when they have none (a buyer with no delivery rules, e.g. Stone Avy), it
+  falls back to the invoice's own Port of discharge (`DocumentJson` header), marked "from the invoice" like an old
+  invoice's (`usp_Invoice_GetList` and the Delivery filter's values). The invoice itself and adding PO lines still
+  use only the PO lines' location.
 
 ### 7.7 Coding standards and API conventions (18 Nov 2026)
 
