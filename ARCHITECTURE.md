@@ -283,9 +283,13 @@ Full design and decisions: the plan `plan/test-data-refresh` (kept with the owne
   a copied and a kept table. Exit codes: 0 done / dry run, 1 failed (test unchanged), 2 not run (a check failed).
 - **Logs** show table names and row counts only. The run's summary is on the workflow page and in
   `ops.DataRefreshRun` (test).
-- **Status (19 Nov 2026):** built and tested against two databases built from the migrations (locally and in CI:
-  full copy, rollback on failure, dry run, every table classified). **Not yet run against the real databases**:
-  that follows the owner's setup of the identity, its database users and the GitHub environment, then a dry run.
+- **Status (20 Nov 2026):** built and tested against two databases built from the migrations (locally and in CI:
+  full copy, rollback on failure, dry run, every table classified). Identity, database users, firewall role,
+  environment (`main` only) and variables set up by the owner. **First dry run against the real databases:** sign-in,
+  firewall, permissions (production read-only confirmed) and every rule passed; plan 24 tables copied, 21 kept,
+  about 11 MB. It stopped on one check: production didn't allow SNAPSHOT, so **V048** allows it (only allows a
+  transaction to ask for it; no change for the app, no cost). Next: V048 in production, dry run again, the first
+  real refresh, then `TEST_REFRESH_SCHEDULE=weekly:SUN`.
 
 ---
 
