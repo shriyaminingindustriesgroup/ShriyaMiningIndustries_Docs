@@ -186,6 +186,7 @@
   <a href="#auth">Auth</a>
   <a href="#cost">Cost</a>
   <a href="#operations">Operations</a>
+  <a href="#test-data">Test data</a>
   <a href="#debugging">Debugging</a>
   <a href="#local-dev">Local dev</a>
   <a href="#rollback">Rollback</a>
@@ -421,6 +422,33 @@ flowchart LR
   <code>security.User</code>. Either way you get zero permissions until your email is an <em>Active</em> user with a role. There is no
   self-service bootstrap for the first admin user; it's created directly via SQL (see
   <a href="https://github.com/shriyaminingindustriesgroup/ShriyaMiningIndustries_Docs/blob/main/ARCHITECTURE.md#8-authentication--authorization">ARCHITECTURE.md §8</a> for the exact script).</p>
+</section>
+
+<section id="test-data">
+  <h2>Refresh test data from production</h2>
+  <p>Replaces test's business data (invoices, purchase orders, buyers, vendors, …) with production's. Test keeps its own
+  users, passwords, settings, mail settings and logs. One transaction: a failed run leaves test unchanged. Tell testers
+  before a real refresh. All of this is in the <strong>API repo on GitHub</strong>; nothing in Azure.</p>
+  <h3>Refresh now</h3>
+  <ol>
+    <li>API repo → <strong>Actions</strong> → <em>Refresh test data from production</em> → <strong>Run workflow</strong>.</li>
+    <li>Branch <code>main</code>; tick <em>Dry run</em> to only check (changes nothing), untick for a real refresh; mode <code>variable</code>.</li>
+    <li><strong>Run workflow</strong>, open the run: about 3–4 minutes. Green: the summary lists every table and row count. Red: test is unchanged; the <em>Refresh</em> step says why (ARCHITECTURE.md §12.2).</li>
+  </ol>
+  <p class="dim">Terminal: <code>gh workflow run refresh-test-data.yml --ref main</code> (add <code>-f dry_run=true</code> to only check).
+  On demand runs even when the schedule is off or paused.</p>
+  <h3>Schedule, pause, resume</h3>
+  <p>API repo → <strong>Settings → Secrets and variables → Actions → Variables</strong>. A timer checks every day at 02:30 UTC (08:00 IST); no deploy needed after a change.</p>
+  <table>
+    <tr><th>Variable</th><th>Value</th><th>Effect</th></tr>
+    <tr><td><code>TEST_REFRESH_SCHEDULE</code></td><td><code>off</code></td><td>On demand only (current)</td></tr>
+    <tr><td></td><td><code>weekly:SUN</code></td><td>Every Sunday, India date (any day MON…SUN). Recommended</td></tr>
+    <tr><td></td><td><code>daily</code> · <code>monthly:1</code></td><td>Every day · that day of each month (1–28)</td></tr>
+    <tr><td><code>TEST_REFRESH_PAUSE_UNTIL</code></td><td><code>2026-12-15</code></td><td>No scheduled runs before that date; delete the variable to resume early</td></tr>
+    <tr><td><code>TEST_REFRESH_MODE</code></td><td><code>full</code></td><td>Leave as is (delta comes later)</td></tr>
+  </table>
+  <p class="dim">Last refresh: the workflow's run list, or <code>ops.DataRefreshRun</code> in the test database. A new table must be added to
+  <code>database/refresh/tables.json</code> (copy or keep) or the build fails. Full guide: ARCHITECTURE.md §12.2; design: §6.3.</p>
 </section>
 
 <section id="cost">

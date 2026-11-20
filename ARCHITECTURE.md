@@ -1366,18 +1366,114 @@ so far; Application Insights *Usage and estimated costs*; the uptime check's las
 **Targets** (shown on Health, tested in the UI's `services/health.ts`): no server errors (or under 1% once
 there are 100+ logged requests); nobody locked out right now; account and invoice emails at least 99% sent.
 
-### 12.2 Test-data refresh runbook (19 Nov 2026)
+### 12.2 Test-data refresh: how to run, schedule, pause and check it (20 Nov 2026)
 
-| Situation | What to do |
+How it works and why: §6.3. Everything below is done in the **API repo on GitHub**
+(`shriyaminingindustriesgroup/ShriyaMiningIndustries_api`) by someone with admin access to it; nothing is
+done in Azure. A refresh replaces test's business data (invoices, purchase orders, buyers, vendors, …) with
+production's; test keeps its own users, passwords, settings, mail settings and logs.
+
+**Before any real refresh:** tell the testers. Anything they changed in test's business data is replaced.
+Their sign-in and settings are not touched.
+
+#### Refresh now (on demand)
+
+1. API repo → **Actions** tab → in the left list, **Refresh test data from production**.
+2. **Run workflow** (button on the right) and fill in:
+   - **Use workflow from:** `main` (the only branch allowed to use the refresh identity);
+   - **Dry run:** tick it to only check and list what would be copied (changes nothing); leave it unticked for a
+     real refresh;
+   - **mode:** leave `variable` (uses `TEST_REFRESH_MODE`, today `full`).
+3. Click the green **Run workflow**. A new run appears in a few seconds; open it.
+4. It takes about 3–4 minutes: *decide* (a few seconds), then *refresh* (sign in, open the firewall for the
+   runner, wait 60 s, refresh, close the firewall).
+5. **Green** = done. The run's **Summary** lists every table and its row count, and a line like
+   *Refreshed 24 tables, 523 rows, from shriyaminingdb as of 2026-11-20 02:26 UTC*. **Red** = test is
+   unchanged; see *When a run is red* below.
+
+On demand always runs, even when the schedule is `off` or paused. Only one refresh runs at a time; a second
+request waits for the first.
+
+From a terminal (GitHub CLI, signed in to the account that owns the repo):
+
+```bash
+gh workflow run refresh-test-data.yml --ref main -f dry_run=true    # check only
+gh workflow run refresh-test-data.yml --ref main                    # real refresh
+gh run list --workflow refresh-test-data.yml --limit 5              # recent runs
+```
+
+#### Schedule automatic refreshes
+
+1. API repo → **Settings** → **Secrets and variables** → **Actions** → **Variables** tab.
+2. Under *Repository variables*, edit (pencil icon) **`TEST_REFRESH_SCHEDULE`** and set one of:
+
+| Value | Refreshes |
 |---|---|
-| A refresh run failed (GitHub emails a red run) | Test is unchanged (one transaction). Open the run: the summary says why. *Not run* (exit 2) lists the failed safety check, e.g. a new table without a rule in `tables.json`, or a test-only NOT NULL column without a default: fix in the API repo, then Run workflow again. *Failed* (exit 1): often the serverless wake-up (§12 cold start): just run it again. |
-| Testers need data from today | Actions → *Refresh test data from production* → Run workflow (tick *dry run* first if unsure). Tell testers: their changes in test's business data are replaced. |
-| Stop refreshes for a while | Set `TEST_REFRESH_PAUSE_UNTIL` to the first day it may run again; or `TEST_REFRESH_SCHEDULE` = `off` to stop until switched back. On demand still works. |
-| "When was test last refreshed?" | The workflow's run list, or `ops.DataRefreshRun` in the test database (newest first: outcome, tables, rows, the snapshot time). |
+| `off` | Never on its own (on demand only). **Current setting.** |
+| `daily` | Every day |
+| `weekly:SUN` | Every Sunday (`MON`, `TUE`, `WED`, `THU`, `FRI`, `SAT`, `SUN`). **Recommended.** |
+| `monthly:1` | On that day of every month (1–28) |
+
+3. **Update variable.** That's all: no deploy, it applies from the next morning.
+
+The workflow's timer fires every day at **02:30 UTC (08:00 IST)** and checks the variable; days are India's
+dates, so `weekly:SUN` means Sunday morning in India. A value it doesn't understand (e.g. `weekly:Sunday`)
+fails that morning's run in red, so a typo never silently stops refreshes. To change the time of day itself,
+change the `cron` line in `.github/workflows/refresh-test-data.yml` (UTC) and release it to `main`.
+
+Cost: the daily check uses about a minute of the repo's free GitHub Actions minutes; a refresh keeps both
+databases awake for a few minutes (within their free monthly allowance at weekly). Daily refreshes wake both
+databases every day: prefer `weekly:SUN` unless testers need fresher data.
+
+#### Pause and resume
+
+| To | Do |
+|---|---|
+| Pause until a date | Variables → **New repository variable** `TEST_REFRESH_PAUSE_UNTIL` = the first day it may run again, e.g. `2026-12-15` (format `YYYY-MM-DD`). Runs resume on that day by themselves. |
+| Resume early | Delete `TEST_REFRESH_PAUSE_UNTIL` (bin icon). |
+| Stop until switched back | Set `TEST_REFRESH_SCHEDULE` to `off`. |
+| Stop everything, even the daily check | Actions → *Refresh test data from production* → **⋯** → **Disable workflow** (Enable it again the same way). On demand doesn't work while it's disabled. |
+
+GitHub doesn't allow an empty variable: "not paused" means `TEST_REFRESH_PAUSE_UNTIL` doesn't exist.
+
+#### Check when test was last refreshed
+
+- API repo → Actions → *Refresh test data from production*: the run list (a green run with a *refresh* job is
+  a refresh; runs where only *decide* ran were "not due today").
+- Or in the **test** database (Portal → `shriyaminingdbtest` → Query editor):
+
+```sql
+SELECT TOP (10) StartedOn, FinishedOn, TriggeredBy, RequestedBy, Outcome, TablesCopied, RowsCopied, SourceSnapshotOn, Error
+FROM ops.DataRefreshRun ORDER BY DataRefreshRunId DESC;
+```
+
+#### When a run is red
+
+Test is unchanged: the refresh is one transaction. Open the run → *refresh* job → *Refresh* step:
+
+| It says | Meaning and fix |
+|---|---|
+| `PROBLEM: … has no rule in database/refresh/tables.json` | A new table was added without deciding copy or keep. Add it to `tables.json` (API repo) and release; a build test normally catches this first. |
+| `PROBLEM: … exists only in the target, is NOT NULL and has no default` | Test is a release ahead of production with a new required column. Give the column a default in its migration, or refresh after the release reaches production. |
+| `PROBLEM: … is writable for this identity` | Someone gave the refresh identity write access to production. Remove it (it must have `db_datareader` only there). |
+| `PROBLEM: … doesn't allow SNAPSHOT` | V048 was undone on that database; release migrations again. |
+| `Failed, nothing changed …` with a timeout or "not currently available" | The serverless database was waking up (§12). Run it again. |
+| The *Azure login* or *Open SQL firewall* step fails | The refresh identity's federated credential, its `REFRESH_CLIENT_ID` secret in the `test-refresh` environment, or its firewall role was changed. Check them in the Portal and GitHub (environment `test-refresh`, `main` only). |
+| *decide* fails with `TEST_REFRESH_SCHEDULE must be …` | A typo in the variable: fix it as in the table above. |
+
+#### When the database changes
+
+- **New table:** add it to `database/refresh/tables.json` as `copy` (business data) or `keep` (test's own:
+  users, settings, logs), with a reason. The build fails until it's there (§7.8).
+- **New NOT NULL column:** give it a default in the migration, so a refresh still works while test is a
+  release ahead.
 
 ---
 
 ## 13. Common tasks
+
+**Refresh test data from production / schedule or pause it:** §12.2 (API repo → Actions → *Refresh test data
+from production* → Run workflow; schedule with the variable `TEST_REFRESH_SCHEDULE`).
 
 **Deploy a change:** push to `test`, watch its CI run (both repos — the API repo's deploy
 auto-triggers the UI repo's via `repository_dispatch`), validate on the test URL, then open a PR
