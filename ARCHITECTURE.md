@@ -856,10 +856,12 @@ data types. What it found, fixed:
   from the Loading agent service, logged as `LoadingPlan`; on test the allow-list applies.
 - `V050` (20 Nov 2026) **POs entered by hand**: `Manual` joins `Pdf` and `Spreadsheet` as a buyer's PO format
   (Admin → Buyers, "Manual PO") and as a PO's `Source`. Picking such a buyer on Upload POs opens the form (PDF
-  upload stays as the second choice): PO number, date, currency, ship to, optional terms; lines with description,
-  SKU, size (thick x width x length, fractions like 17-1/2), pieces per crate, crates, priced per sq ft, per piece or
-  per crate, and the price (may come later; invoicing then has no PO price to lock). Pieces and sq ft are worked out;
-  the quantity is in the priced unit. Checks show only after Create PO. It is saved through the PDF confirm (line
+  upload stays as the second choice) with the Upload PO review's fields (PO#, date, buyer as printed, terms, dates,
+  SO#, entered by, currency, ship to, terms and conditions) and lines in the invoice's columns: category, stone,
+  finish, size (fractions like 17-1/2), SKU, crates, qty, UoM, rate (may come later; invoicing then has no PO price
+  to lock), amount. Line IDs show as they'll be saved ({PO#}-01…). The description is written "STONE W x L FINISH"
+  and a blank SKU starts with the category code (GRN, SLT, LIM, QTZ), so an invoice finds the stone, finish, size and
+  goods category by itself. Checks show only after Create PO. It is saved through the PDF confirm (line
   Ids, delivery location, history), with a text record of what was entered as its document (`Layout` `Manual`,
   `text/plain`). A PO number the buyer already has is refused. V050 also undoes V049 (orders sent as text, tried on
   test and reverted): `Text` buyers become `Manual`.
