@@ -437,13 +437,20 @@ empty database from V001–V029 + `R__` and running it again (only the `R__` fil
   at any time (it's only a label; POs and invoices use `BuyerId`).
 - **Photos in the email to the buyer (V027, 2026-11-16).** The Save and send email popup has
   **Add photos** (the computer's file picker, several at once; thumbnails with remove). The browser
-  shrinks each photo (`email-photos.ts`: long side ≤ 1600 px, JPEG quality 0.8; a 12 MB photo became
-  ~600 KB in testing); types the browser can't open (e.g. iPhone HEIC in Chrome/Edge) are refused with a
-  message to save them as JPEG. **Limits: at most 10 photos, and the invoice PDF plus photos at most
-  3 MB per email** (the user's choice, which is also Microsoft Graph's simple-send limit, so it stays
-  valid after the move to Microsoft 365). The popup shows the running total and blocks sending over it;
-  the API checks again (`EmailPhotos`: count, JPEG/PNG by the file's first bytes, clean distinct names,
-  the 3 MB total) before anything is sent. Everyone on the email (To, CC, BCC, the service mailbox) gets
+  compresses each photo (`email-photos.ts`, **adaptive since 20 Nov 2026**, plan/cloud-drive-integration §3.7):
+  a 1600 px high-quality JPEG "master" per photo (upright; metadata including GPS dropped), then encoded at the
+  gentlest step and stepped down together (quality 0.82 → 0.55, then 1280 / 1024 px) until the PDF and photos fit.
+  **iPhone HEIC** photos are converted in the browser: Safari natively, other browsers with `heic-to` (libheif,
+  LGPL-3.0, CSP-safe build, used unmodified), a separate 3.2 MB file (809 KB compressed) downloaded only when a
+  HEIC photo is chosen; it runs in a `blob:` worker, so the CSP has `worker-src 'self' blob:`. **Limits: at most
+  20 photos, and the invoice PDF plus photos at most `EMAIL_MAX_ATTACHMENTS_MB` (default 10 MB, refused above
+  14)**: Zoho sends 25 MB, but encoded mail grows by a third and many receiving servers stop at 20–25 MB, and
+  Static Web Apps accepts requests of at most 30 MB (14 MB of attachments is ~19 MB of JSON). With
+  `EMAIL_PROVIDER=Graph` the limit drops to 3 MB automatically (Microsoft 365's simple send). The draft
+  (`GET …/approval-email`) carries `attachmentLimitBytes` and `maxPhotos`, so the popup and the API always
+  agree; above 5 MB the popup notes that large emails may not reach every mailbox. The API checks again
+  (`EmailPhotos`: count, JPEG/PNG by the file's first bytes, clean distinct names, the total) before
+  anything is sent. Everyone on the email (To, CC, BCC, the service mailbox) gets
   the PDF and the photos; acknowledgement emails don't. **The photos aren't stored** (no database
   growth): `app.InvoiceReviewRequest.PhotosJson` keeps only `{ name, bytes, sha256 }` per photo, listed
   as "Photos sent" on the Buyer approval card; the buyer's review page is unchanged. In the payload log
@@ -1204,8 +1211,19 @@ environment (and the standby Function Apps), never in a repo: `EMAIL_PROVIDER` (
 `EMAIL_SMTP_HOST`, `EMAIL_SMTP_PORT`, and one login per service key, `EMAIL_SMTP_USER__<KEY>` /
 `EMAIL_SMTP_PASSWORD__<KEY>` (the mailbox's Zoho **app-specific password**, a secret). For Microsoft
 365 later: `EMAIL_GRAPH_TENANT_ID`, `EMAIL_GRAPH_CLIENT_ID`, `EMAIL_GRAPH_CLIENT_SECRET` (secret). On
-Test, `EMAIL_TEST_ALLOWLIST` limits who email can go to. The Services screen only shows whether a
-login is set up. These belong in the Key Vault plan below with the SQL password.
+Test, `EMAIL_TEST_ALLOWLIST` limits who email can go to. `EMAIL_MAX_ATTACHMENTS_MB` (not secret, optional,
+default 10, at most 14) is the email attachment limit. The Services screen only shows whether a
+login is set up.
+
+**Cloud storage (20 Nov 2026, plan/cloud-drive-integration):** Google Drive for the invoice archive and the email
+photo picker. The owner made, in a Google Cloud project with no billing account: the Google Drive API; a sign-in
+client (consent screen External, **only** the non-sensitive `drive.file` scope, published *In production*, home
+`https://app.shriyamining.com`, privacy `/privacy`, terms `/terms`; redirect URIs `…/api/cloud-connections/google/callback`
+on the own domain, the future `www.` address and both Azure addresses); and a service account that reads the shared
+photo folders (live and test) as Viewer. App settings in **both** environments: `CLOUD_GOOGLE_CLIENT_ID`,
+`CLOUD_GOOGLE_CLIENT_SECRET` (secret), `PHOTO_GOOGLE_SERVICE_ACCOUNT_KEY` (secret: the service account's JSON key,
+base64), `CLOUD_TOKEN_ENCRYPTION_KEY` (secret: encrypts stored connections; **different per environment; changing it
+means reconnecting**). OneDrive and Zoho WorkDrive follow the same pattern later (`CLOUD_ONEDRIVE_*`, `CLOUD_ZOHO_*`). These belong in the Key Vault plan below with the SQL password.
 
 **The planned fix (not yet built — architecture decision made, implementation deferred):**
 - **Near-term:** centralize the password in **Azure Key Vault**, one secret per environment.
@@ -1509,6 +1527,10 @@ the app.
 ---
 
 ## 14. Open items / not yet done
+
+- Cloud storage (plan/cloud-drive-integration): **R1 built 20 Nov 2026** (adaptive compression, iPhone HEIC,
+  10 MB / 20 photos, privacy and terms pages). Next: R2 invoice archive (Google Drive first), R3 photo picker; then
+  the OneDrive and Zoho WorkDrive adapters once the owner configures them.
 
 - Key Vault centralization for the SQL password (§11) — architecture decided, not yet built.
 - Custom domain (19 Nov 2026): production's own domain (DNS CNAME at the registrar, portal Custom domains step,
