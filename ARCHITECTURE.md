@@ -268,7 +268,9 @@ Full design and decisions: the plan `plan/test-data-refresh` (kept with the owne
   (delta later). **Pause:** schedule `off` (indefinitely) or a pause date. **On demand:** Actions → *Refresh test
   data from production* → Run workflow (or `gh workflow run refresh-test-data.yml -f dry_run=true`); on demand
   always runs, even when paused. One refresh at a time (concurrency group).
-- **What:** `database/refresh/tables.json` gives **every** table `copy` or `keep`. Copied: the business tables
+- **What:** `database/refresh/tables.json` gives **every** table `copy`, `keep` or `clear` (emptied, never copied: since
+  20 Nov 2026, for environment caches such as the invoice archive's cloud folder ids and queue, so production's never
+  reach test; nothing copied or kept may point at a cleared table). Copied: the business tables
   (`app`, `sales`) except settings, mail-service settings and the email log. Kept: all of `security` (test's own
   users and sign-in; production's passwords and sessions never leave production), `log`, `ops`, the migration
   journal. A table without a rule stops the run, and a test (`DataRefreshTests.EveryTable_HasASafeRule`)
@@ -932,8 +934,8 @@ the build and tests; the rest is reviewed. Each rule exists because of a real pr
   goes before a `WITH … AS (…)` block). A test enforces both (§7.3).
 - [ ] Names `PK_/FK_/UQ_/UX_/IX_/CK_/DF_<Table>_<Column>`; every foreign key indexed (a test checks);
   normalized tables; changes an Admin makes to people are history rows.
-- [ ] A **new table gets a rule** in `database/refresh/tables.json` (`copy` from production, or `keep` test's
-  own), and a new NOT NULL column gets a default (test may be a release ahead of production during a refresh).
+- [ ] A **new table gets a rule** in `database/refresh/tables.json` (`copy` from production, `keep` test's
+  own, or `clear` for environment caches like cloud ids), and a new NOT NULL column gets a default (test may be a release ahead of production during a refresh).
   A test fails otherwise (§6.3).
 - [ ] No dynamic SQL in procedures (a test fails). The one reviewed exception is the test-data refresh's
   `R__platform-70-data-refresh.sql`: it works on any table, so names are matched against the catalog and
@@ -1225,6 +1227,35 @@ photo folders (live and test) as Viewer. App settings in **both** environments: 
 base64), `CLOUD_TOKEN_ENCRYPTION_KEY` (secret: encrypts stored connections; **different per environment; changing it
 means reconnecting**). OneDrive and Zoho WorkDrive follow the same pattern later (`CLOUD_ONEDRIVE_*`, `CLOUD_ZOHO_*`). These belong in the Key Vault plan below with the SQL password.
 
+**Invoice archive (R2, built 20 Nov 2026):** every invoice emailed for approval, and the buyer's decision, saved to the
+chosen cloud (Google Drive by default) as `Invoice / Buyer / MMddyyyyHHmmss / InvoiceNumber_MMddyyyyHHmmss /` (India
+time: the day folder is named after that buyer's first invoice of the day) holding the PDF exactly as emailed, the
+photos as emailed (*Save photos*, on by default) and the decision copy `INV-… - APPROVED|REJECTED <time>.pdf` (buyer,
+time and remarks in the file's description). How it's built:
+- **Module `Modules.Media`** (new; depends on Shared only): connected clouds (`app.CloudConnection`, refresh tokens
+  AES-256-GCM-encrypted with `CLOUD_TOKEN_ENCRYPTION_KEY`), Google sign-in (authorization code + PKCE, only
+  `drive.file`, offline access), the Google Drive client (plain `HttpClient`, 30 s calls, short retry on 429/5xx; every
+  URL a fixed Google host with escaped ids). Invoice reaches it only through `Api/Adapters/InvoiceArchiveAdapter`.
+- **Connecting** (Company profile → Cloud storage; permission `cloudstorage.manage`, Admin): `POST console/cloud-connections/google/connect`
+  sets a 10-minute encrypted state cookie `smi_cloud_connect` (HttpOnly, Secure, **SameSite=Lax**, Max-Age only) and
+  returns Google's sign-in page; Google returns to `/api/cloud-connections/google/callback`, which only forwards to
+  `/admin/company-profile?tab=cloud&…` (the sign-in cookie is SameSite=Strict, so it isn't sent on Google's redirect);
+  the page finishes with `POST console/cloud-connections/google/complete` (state, same Admin, 10 minutes). The return
+  address is built only from `SiteAddresses`.
+- **Queue** (V051, `R__platform-12`/`-14`): `usp_InvoiceReview_Activate` writes a *Sending* task and
+  `usp_InvoiceReview_Decide` a *Decision* task in the same transaction (only when the archive is on); the emailed
+  photos are passed into `usp_InvoiceReview_CreateRequest` as JSON and kept in `app.InvoiceArchiveFile` only until
+  uploaded. Saving is a **separate call** the browser makes after the send/decision answers (`POST invoices/{id}/archive`,
+  `POST public/invoice-review/archive`), 30 s budget, so a slow cloud never delays them (Static Web Apps ends calls at
+  45 s); the Cloud storage screen also saves one waiting task when opened. Claims use `UPDLOCK, READPAST` (procedure
+  sets READ COMMITTED) and a 2-minute lease; uploads are idempotent (app property on the file; uploaded photos
+  marked); failures back off 1 min → daily, and after 8 tries the task is *Failed*: Error logs `ARCHIVE-UPLOAD-FAILED`
+  and metric `invoice_archive_failed`. A connection Google refuses is marked *Needs reconnecting*: `CLOUD-RECONNECT` in
+  Error logs and an email to the Email Alerts service, once.
+- **Settings** (`app.AppSetting`): `INVOICE_ARCHIVE_ENABLED` (0), `INVOICE_ARCHIVE_PROVIDER` (`GoogleDrive`),
+  `INVOICE_ARCHIVE_SAVE_PHOTOS` (1). Switching on needs the cloud's Invoice folder (Google: *Create Invoice folder*, the
+  app can only see what it creates). Cost $0; files use the connected account's storage.
+
 **The planned fix (not yet built — architecture decision made, implementation deferred):**
 - **Near-term:** centralize the password in **Azure Key Vault**, one secret per environment.
   Function App / SWA app settings reference it via a Key Vault Reference
@@ -1498,6 +1529,16 @@ Test is unchanged: the refresh is one transaction. Open the run → *refresh* jo
 - **New NOT NULL column:** give it a default in the migration, so a refresh still works while test is a
   release ahead.
 
+### 12.3 Invoice archive runbook (20 Nov 2026)
+
+| Situation | What to do |
+|---|---|
+| Set it up (each environment) | Company profile → Cloud storage → **Connect** Google Drive (the account that owns the folders) → **Create Invoice folder** → tick *Save every emailed invoice* (and *Save photos*) → **Save archive settings**. |
+| "Needs reconnecting" (email from Email Alerts, `CLOUD-RECONNECT`) | Cloud storage → **Reconnect** with the same account. Waiting saves go through on the next sends, decisions or when the screen is opened. |
+| Saves failed (`ARCHIVE-UPLOAD-FAILED`, alert) | Cloud storage lists them with the reason: fix it (reconnect, Invoice folder deleted → Create it again, account full), then **Retry failed**. **Discard** gives up on one (its kept photos are deleted). |
+| An invoice isn't in the folder yet | It's waiting: the screen shows *waiting*; opening Cloud storage saves one at a time. |
+| Move to a company account later | Connect the new account (Reconnect), **Create Invoice folder** there; new saves go to it; old files stay where they are. |
+
 ---
 
 ## 13. Common tasks
@@ -1529,8 +1570,8 @@ the app.
 ## 14. Open items / not yet done
 
 - Cloud storage (plan/cloud-drive-integration): **R1 built 20 Nov 2026** (adaptive compression, iPhone HEIC,
-  10 MB / 20 photos, privacy and terms pages). Next: R2 invoice archive (Google Drive first), R3 photo picker; then
-  the OneDrive and Zoho WorkDrive adapters once the owner configures them.
+  10 MB / 20 photos, privacy and terms pages); **R2 invoice archive built 20 Nov 2026** (Google Drive). Next: R3 photo
+  picker; then the OneDrive and Zoho WorkDrive adapters once the owner configures them.
 
 - Key Vault centralization for the SQL password (§11) — architecture decided, not yet built.
 - Custom domain (19 Nov 2026): production's own domain (DNS CNAME at the registrar, portal Custom domains step,
