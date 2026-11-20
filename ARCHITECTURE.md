@@ -288,8 +288,9 @@ Full design and decisions: the plan `plan/test-data-refresh` (kept with the owne
   environment (`main` only) and variables set up by the owner. **First dry run against the real databases:** sign-in,
   firewall, permissions (production read-only confirmed) and every rule passed; plan 24 tables copied, 21 kept,
   about 11 MB. It stopped on one check: production didn't allow SNAPSHOT, so **V048** allows it (only allows a
-  transaction to ask for it; no change for the app, no cost). Next: V048 in production, dry run again, the first
-  real refresh, then `TEST_REFRESH_SCHEDULE=weekly:SUN`.
+  transaction to ask for it; no change for the app, no cost). **First real refresh 20 Nov 2026 02:26 UTC**
+  (V048 in production first): 24 tables, 523 rows, every count matched production; test healthy afterwards.
+  The schedule stays `off` (on demand only) until the owner switches it on (`weekly:SUN` recommended).
 
 ---
 
