@@ -843,7 +843,10 @@ data types. What it found, fixed:
   `LoadingPlan` as an email-log kind. The container fit's **Loading plan** is a picture plan for loaders who
   don't read English (wall, doors, sides by colour, each spot's steps and stack picture, a checklist with each
   crate from above with its two measurements, the invoice / container no. / shipping reference at the top);
-  spots are the fit check's own stacks (`loadingSpots`). The **Fit** tab shows the same map, a ✓/✗ card,
+  spots are the fit check's own stacks (`loadingSpots`). On the map (option A2, 19 Nov 2026) each spot has
+  its steps as a dark badge and its crates top first as bars to scale (length against the bottom crate, height
+  against the stack), coloured by size, the crate number as big as the bar allows; the entrance (E1) is the
+  doors wide open with a green arrow and a forklift coming in, and crates that don't fit sit beyond it. The **Fit** tab shows the same map, a ✓/✗ card,
   crates that don't fit in red with their size and the reason as a picture, and the rules as pictures; the
   office figures, table and numbered top view are under Details. **Email to loading agent** builds a PDF of
   the plan in the browser (`loading-plan-pdf.ts`, html2canvas + jsPDF like the invoice PDF; the header line on
