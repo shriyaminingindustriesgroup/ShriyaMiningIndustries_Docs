@@ -436,7 +436,11 @@ empty database from V001–V029 + `R__` and running it again (only the `R__` fil
   `GET /api/legacy-invoices/po-open-lines`, `POST /api/legacy-invoices/mark-shipped` ("Mark as shipped
   before go-live": one Delivered old invoice numbered `GL-<PO#>` for everything still open). V018 also
   widens `app.Buyer.Phone` to 40 characters (buyers in any country), and the buyer code can now change
-  at any time (it's only a label; POs and invoices use `BuyerId`).
+  at any time (it's only a label; POs and invoices use `BuyerId`). **Buyer first (20 Nov 2026):** the buyer is
+  chosen before uploading (the upload refuses none) and kept on each file's draft (`buyerId`); every file is saved
+  for it. A file whose PO numbers belong to another buyer isn't saved automatically: the list and the Check screen
+  say whose POs they are. Files uploaded before that still have the buyer worked out (PO numbers, then the
+  consignee). The list shows each invoice's buyer (`InvoiceBuyerId` from the list procedure).
 - **Photos in the email to the buyer (V027, 2026-11-16).** The Save and send email popup has
   **Add photos** (the computer's file picker, several at once; thumbnails with remove). The browser
   compresses each photo (`email-photos.ts`, **adaptive since 20 Nov 2026**, plan/cloud-drive-integration §3.7):
