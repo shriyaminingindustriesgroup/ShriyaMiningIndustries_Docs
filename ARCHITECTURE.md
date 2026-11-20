@@ -889,6 +889,12 @@ data types. What it found, fixed:
   falls back to the invoice's own Port of discharge (`DocumentJson` header), marked "from the invoice" like an old
   invoice's (`usp_Invoice_GetList` and the Delivery filter's values). The invoice itself and adding PO lines still
   use only the PO lines' location.
+- **Invoice in the site's colours (20 Nov 2026, option B, everywhere):** the invoice workbook (preview, Excel,
+  emailed PDF, printout) uses light tints on white paper: parchment title, sand table heads, brown headings,
+  terracotta labels; body text stays black. The tints print as light grey on black-and-white printers, as the
+  greys of 17 Nov did. Borders: the thin row under each line keeps the column lines, and the packing list's
+  Quantity spans columns 7-9 so its table reaches the right edge. The invoice view page's own print HTML
+  (`buildLegacyPrintHtml`) is separate and unchanged.
 
 ### 7.7 Coding standards and API conventions (18 Nov 2026)
 
