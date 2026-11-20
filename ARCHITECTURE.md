@@ -410,6 +410,7 @@ empty database from V001–V029 + `R__` and running it again (only the `R__` fil
   `Spreadsheet`) — the PendingOrders spreadsheet upload is rejected for `Pdf` buyers (no admin
   screen yet). Spreadsheet-only POs were backfilled as revision 0 (`Source='Spreadsheet'`), so a PDF
   of the same PO# becomes an update of those lines. Routes: `POST /api/purchase-orders/extract`,
+  `POST /api/purchase-orders/extract-text` (orders sent as text, V049),
   `POST /api/purchase-orders/documents/{id}/confirm|discard`, `GET /api/purchase-orders/{id}`,
   `GET /api/purchase-orders/documents/{id}/file` (also `file.download`), `GET /api/po-ledger/line-prices`.
   Storage: the two sample PDFs are 27 KB and 174 KB — 10,000 such POs ≈ 0.3–1.9 GB.
@@ -853,6 +854,16 @@ data types. What it found, fixed:
   the plan in the browser (`loading-plan-pdf.ts`, html2canvas + jsPDF like the invoice PDF; the header line on
   every page) and `POST invoices/{id}/loading-plan-email` (`LoadingPlanEmailService`, invoice.send) sends it
   from the Loading agent service, logged as `LoadingPlan`; on test the allow-list applies.
+- `V049` (20 Nov 2026) **orders sent as text** (an email): `Text` joins `Pdf` and `Spreadsheet` as a buyer's PO
+  format (Admin → Buyers, "Order text (email)") and as a PO's `Source`. Upload POs shows **Paste order text** first
+  for such a buyer (PDF upload stays). `OrderTextLayout` reads the text by looking for each piece in the forms it
+  usually takes, not one fixed layout: the order number (ORDER# / PO# / Order No), items (a product code, how much:
+  a share of a container, crates, pieces or SF; pieces per crate; the size, fractions like 17-1/2 read as 17.5), a
+  product name line, the port or destination, a written date. Quantities are SF with pieces as the second unit; SF
+  per crate is worked out from the size. A missing date becomes today's, and every line it couldn't place is listed
+  as a note, never dropped. From there it is the PDF flow: the text is kept as the PO's document (`text/plain`),
+  the same checks and review screen (crates and price fill the quantity, pieces and amount), the same save.
+  The same text again is a duplicate.
 
 ### 7.7 Coding standards and API conventions (18 Nov 2026)
 
