@@ -1251,9 +1251,9 @@ means reconnecting**). OneDrive and Zoho WorkDrive follow the same pattern later
 
 **Invoice archive (R2; rule changed by the owner 20 Nov 2026):** when an invoice is **marked Delivered** (invoice page),
 its PDF is saved to the chosen cloud (Google Drive by default) **straight in the buyer's folder**: `Invoice / Buyer /
-Invoice_26.pdf`, with the invoice's own PDF name (as downloaded). Saving it again (marked Delivered again, or *Save
-again*) **replaces** that file (same link; Drive keeps the old one as a previous version). No date or per-invoice
-folders, no photos, no decision copy, and nothing is saved when an invoice is emailed. Old invoices recorded through
+Invoice_26_MMDDYYYYHHMMSS.pdf`: the invoice's own PDF name (as downloaded) and the India time it was marked Delivered,
+month first (owner, 21 Nov). Marked Delivered again (or *Save again*): **a new file; earlier ones stay** (V055). No date
+or per-invoice folders, no photos, no decision copy, and nothing is saved when an invoice is emailed. Old invoices recorded through
 *Old invoices* aren't saved. The file's description says who marked it Delivered and when (India time). How it's built:
 - **Module `Modules.Media`** (new; depends on Shared only): connected clouds (`app.CloudConnection`, refresh tokens
   AES-256-GCM-encrypted with `CLOUD_TOKEN_ENCRYPTION_KEY`), Google sign-in (authorization code + PKCE, only
@@ -1269,11 +1269,11 @@ folders, no photos, no decision copy, and nothing is saved when an invoice is em
 - **Queue** (V051, V054, `R__platform-14`): the invoice page makes the PDF in the browser (PDFs are client-side, §12)
   right after the status change to Delivered and calls `POST invoices/{id}/archive` (`invoice.status`) with it — a
   **separate call**, so a slow cloud never delays the status change. `usp_InvoiceArchiveTask_QueueDelivered` keeps the PDF
-  in `app.InvoiceArchiveTask` (kind *Delivered*, one per invoice: a new save replaces the earlier one; refused unless
-  the invoice is Delivered), then the same call saves it (30 s budget; Static Web Apps ends calls at 45 s) plus one more
+  in `app.InvoiceArchiveTask` (kind *Delivered*, one row per save, so every save is kept; refused unless the invoice is
+  Delivered), then the same call saves it (30 s budget; Static Web Apps ends calls at 45 s) plus one more
   waiting save; the Cloud storage screen also saves one waiting save when opened. Claims use `UPDLOCK, READPAST`
-  (procedure sets READ COMMITTED) and a 2-minute lease; the file carries the invoice's key (Drive app property), so a
-  retry replaces instead of duplicating; the PDF is dropped once saved. Failures back off 1 min → daily, and after 8
+  (procedure sets READ COMMITTED) and a 2-minute lease; the file carries its save's key (Drive app property), so a
+  retry finds it instead of making a copy; the PDF is dropped once saved. Failures back off 1 min → daily, and after 8
   tries the save is *Failed*: Error logs `ARCHIVE-UPLOAD-FAILED` and metric `invoice_archive_failed`. A connection Google
   refuses is marked *Needs reconnecting*: `CLOUD-RECONNECT` in Error logs and an email to the Email Alerts service, once.
   V054 discarded the earlier design's waiting Sending/Decision saves and their staged photos; done ones stay as a record.

@@ -381,8 +381,8 @@ flowchart LR
   everyone on the email but aren't stored: only their names, sizes and fingerprints are listed on the Buyer
   approval card. Public <code>/privacy</code> and <code>/terms</code> pages back the Google Drive sign-in (20 Nov).</p>
   <p><strong>Invoice archive (20 Nov):</strong> when an invoice is marked <em>Delivered</em>, its PDF is saved to
-  Google Drive straight in the buyer's folder, <code>Invoice / Buyer / Invoice_26.pdf</code> (the invoice's own file name;
-  saving again replaces it). Company profile → Cloud storage: connect once, <em>Create Invoice folder</em>, switch on.
+  Google Drive straight in the buyer's folder, <code>Invoice / Buyer / Invoice_26_MMDDYYYYHHMMSS.pdf</code> (the invoice's
+  own file name and the India time it was marked Delivered; marked Delivered again: a new file, earlier ones stay). Company profile → Cloud storage: connect once, <em>Create Invoice folder</em>, switch on.
   The invoice page makes the PDF and saves it in a separate call after the status change, with a queue, retries, alerts
   and <em>Retry failed</em>. New module <code>Modules.Media</code>; the test-data refresh empties its caches (<code>clear</code>).</p>
   <p><strong>Photo folders (20 Nov):</strong> <em>Add photos ▾</em> in the send pop-up also offers the Google Drive
