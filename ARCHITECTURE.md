@@ -1241,41 +1241,61 @@ login is set up.
 **Cloud storage (20 Nov 2026, plan/cloud-drive-integration):** Google Drive for the invoice archive and the email
 photo picker. The owner made, in a Google Cloud project with no billing account: the Google Drive API; a sign-in
 client (consent screen External, **only** the non-sensitive `drive.file` scope, published *In production*, home
-`https://app.shriyamining.com`, privacy `/privacy`, terms `/terms`; redirect URIs `…/api/cloud-connections/google/callback`
+`https://app.shriyamining.com`, privacy `/privacy`, terms `/terms`; redirect URIs `…/cloud-connect/google`
+(a page, not `/api`: Static Web Apps answers 500 to any `/api` request carrying a `code` parameter, found 20 Nov 2026)
 on the own domain, the future `www.` address and both Azure addresses); and a service account that reads the shared
 photo folders (live and test) as Viewer. App settings in **both** environments: `CLOUD_GOOGLE_CLIENT_ID`,
 `CLOUD_GOOGLE_CLIENT_SECRET` (secret), `PHOTO_GOOGLE_SERVICE_ACCOUNT_KEY` (secret: the service account's JSON key,
 base64), `CLOUD_TOKEN_ENCRYPTION_KEY` (secret: encrypts stored connections; **different per environment; changing it
 means reconnecting**). OneDrive and Zoho WorkDrive follow the same pattern later (`CLOUD_ONEDRIVE_*`, `CLOUD_ZOHO_*`). These belong in the Key Vault plan below with the SQL password.
 
-**Invoice archive (R2, built 20 Nov 2026):** every invoice emailed for approval, and the buyer's decision, saved to the
-chosen cloud (Google Drive by default) as `Invoice / Buyer / MMddyyyyHHmmss / InvoiceNumber_MMddyyyyHHmmss /` (India
-time: the day folder is named after that buyer's first invoice of the day) holding the PDF exactly as emailed, the
-photos as emailed (*Save photos*, on by default) and the decision copy `INV-… - APPROVED|REJECTED <time>.pdf` (buyer,
-time and remarks in the file's description). How it's built:
+**Invoice archive (R2; rule changed by the owner 20 Nov 2026):** when an invoice is **marked Delivered** (invoice page),
+its PDF is saved to the chosen cloud (Google Drive by default) **straight in the buyer's folder**: `Invoice / Buyer /
+Invoice_26.pdf`, with the invoice's own PDF name (as downloaded). Saving it again (marked Delivered again, or *Save
+again*) **replaces** that file (same link; Drive keeps the old one as a previous version). No date or per-invoice
+folders, no photos, no decision copy, and nothing is saved when an invoice is emailed. Old invoices recorded through
+*Old invoices* aren't saved. The file's description says who marked it Delivered and when (India time). How it's built:
 - **Module `Modules.Media`** (new; depends on Shared only): connected clouds (`app.CloudConnection`, refresh tokens
   AES-256-GCM-encrypted with `CLOUD_TOKEN_ENCRYPTION_KEY`), Google sign-in (authorization code + PKCE, only
   `drive.file`, offline access), the Google Drive client (plain `HttpClient`, 30 s calls, short retry on 429/5xx; every
   URL a fixed Google host with escaped ids). Invoice reaches it only through `Api/Adapters/InvoiceArchiveAdapter`.
-- **Connecting** (Company profile → Cloud storage; permission `cloudstorage.manage`, Admin): `POST console/cloud-connections/google/connect`
+- **Connecting** (Company profile → Cloud storage; permission `cloudstorage.manage`, Admin; **once**, then it stays
+  connected and renews its own access, so senders never sign in): `POST console/cloud-connections/google/connect`
   sets a 10-minute encrypted state cookie `smi_cloud_connect` (HttpOnly, Secure, **SameSite=Lax**, Max-Age only) and
-  returns Google's sign-in page; Google returns to `/api/cloud-connections/google/callback`, which only forwards to
+  returns Google's sign-in page; Google returns to the **page** `/cloud-connect/google`, which forwards to
   `/admin/company-profile?tab=cloud&…` (the sign-in cookie is SameSite=Strict, so it isn't sent on Google's redirect);
   the page finishes with `POST console/cloud-connections/google/complete` (state, same Admin, 10 minutes). The return
   address is built only from `SiteAddresses`.
-- **Queue** (V051, `R__platform-12`/`-14`): `usp_InvoiceReview_Activate` writes a *Sending* task and
-  `usp_InvoiceReview_Decide` a *Decision* task in the same transaction (only when the archive is on); the emailed
-  photos are passed into `usp_InvoiceReview_CreateRequest` as JSON and kept in `app.InvoiceArchiveFile` only until
-  uploaded. Saving is a **separate call** the browser makes after the send/decision answers (`POST invoices/{id}/archive`,
-  `POST public/invoice-review/archive`), 30 s budget, so a slow cloud never delays them (Static Web Apps ends calls at
-  45 s); the Cloud storage screen also saves one waiting task when opened. Claims use `UPDLOCK, READPAST` (procedure
-  sets READ COMMITTED) and a 2-minute lease; uploads are idempotent (app property on the file; uploaded photos
-  marked); failures back off 1 min → daily, and after 8 tries the task is *Failed*: Error logs `ARCHIVE-UPLOAD-FAILED`
-  and metric `invoice_archive_failed`. A connection Google refuses is marked *Needs reconnecting*: `CLOUD-RECONNECT` in
-  Error logs and an email to the Email Alerts service, once.
-- **Settings** (`app.AppSetting`): `INVOICE_ARCHIVE_ENABLED` (0), `INVOICE_ARCHIVE_PROVIDER` (`GoogleDrive`),
-  `INVOICE_ARCHIVE_SAVE_PHOTOS` (1). Switching on needs the cloud's Invoice folder (Google: *Create Invoice folder*, the
-  app can only see what it creates). Cost $0; files use the connected account's storage.
+- **Queue** (V051, V054, `R__platform-14`): the invoice page makes the PDF in the browser (PDFs are client-side, §12)
+  right after the status change to Delivered and calls `POST invoices/{id}/archive` (`invoice.status`) with it — a
+  **separate call**, so a slow cloud never delays the status change. `usp_InvoiceArchiveTask_QueueDelivered` keeps the PDF
+  in `app.InvoiceArchiveTask` (kind *Delivered*, one per invoice: a new save replaces the earlier one; refused unless
+  the invoice is Delivered), then the same call saves it (30 s budget; Static Web Apps ends calls at 45 s) plus one more
+  waiting save; the Cloud storage screen also saves one waiting save when opened. Claims use `UPDLOCK, READPAST`
+  (procedure sets READ COMMITTED) and a 2-minute lease; the file carries the invoice's key (Drive app property), so a
+  retry replaces instead of duplicating; the PDF is dropped once saved. Failures back off 1 min → daily, and after 8
+  tries the save is *Failed*: Error logs `ARCHIVE-UPLOAD-FAILED` and metric `invoice_archive_failed`. A connection Google
+  refuses is marked *Needs reconnecting*: `CLOUD-RECONNECT` in Error logs and an email to the Email Alerts service, once.
+  V054 discarded the earlier design's waiting Sending/Decision saves and their staged photos; done ones stay as a record.
+- **Settings** (`app.AppSetting`): `INVOICE_ARCHIVE_ENABLED` (0), `INVOICE_ARCHIVE_PROVIDER` (`GoogleDrive`)
+  (`INVOICE_ARCHIVE_SAVE_PHOTOS` is no longer used). Switching on needs the cloud's Invoice folder (Google: *Create
+  Invoice folder*, the app can only see what it creates). Cost $0; files use the connected account's storage.
+
+**Photo folders (R3, built 20 Nov 2026):** in *Send for approval*, **Add photos ▾** offers *From this computer* and each
+photo folder an Admin set up (Company profile → Cloud storage → Photo folders: a name and the folder's Google Drive share
+link; **Check and save** proves the folder can be read and shows the image count and newest photo). The picker lists
+images only, newest first, grouped by India day, 48 a page with *Load more*, search by name, multi-select up to the
+photos still allowed (20 per email); chosen photos are downloaded and compressed like computer photos (R1).
+- The app reads the folders with its **photo reader**, the Google service account in `PHOTO_GOOGLE_SERVICE_ACCOUNT_KEY`
+  (read-only Drive, its own signed token request; each folder is shared with its address as Viewer, shown on the
+  screen). Senders never sign in.
+- `app.PhotoSource` (V052; procedures in `R__platform-76-photo-sources.sql`; refresh action `keep`: test has its own
+  folders). Links are parsed, never fetched: only `https://drive.google.com` folder links. Every thumbnail/download
+  checks the file is an image directly in the folder (not in the bin), 20 MB at most.
+- Endpoints: senders (`invoice.send`) `GET photo-sources`, `GET photo-sources/{id}/photos?cursor&search` (cursor-paged
+  `{ items, nextCursor }`: the cloud gives no totals), `…/photos/{photoId}/thumbnail` (image, browser-cached 1 h) and
+  `…/content`; Admins (`cloudstorage.manage`) `console/photo-sources` list/add/update (rowVersion → 409)/check/delete.
+  Error codes `PHOTO-SOURCE-UNAVAILABLE`, `PHOTO-SOURCE-LINK-INVALID`, `PHOTO-NOT-FOUND`, `PHOTO-TOO-LARGE`.
 
 **The planned fix (not yet built — architecture decision made, implementation deferred):**
 - **Near-term:** centralize the password in **Azure Key Vault**, one secret per environment.
@@ -1554,10 +1574,11 @@ Test is unchanged: the refresh is one transaction. Open the run → *refresh* jo
 
 | Situation | What to do |
 |---|---|
-| Set it up (each environment) | Company profile → Cloud storage → **Connect** Google Drive (the account that owns the folders) → **Create Invoice folder** → tick *Save every emailed invoice* (and *Save photos*) → **Save archive settings**. |
-| "Needs reconnecting" (email from Email Alerts, `CLOUD-RECONNECT`) | Cloud storage → **Reconnect** with the same account. Waiting saves go through on the next sends, decisions or when the screen is opened. |
-| Saves failed (`ARCHIVE-UPLOAD-FAILED`, alert) | Cloud storage lists them with the reason: fix it (reconnect, Invoice folder deleted → Create it again, account full), then **Retry failed**. **Discard** gives up on one (its kept photos are deleted). |
-| An invoice isn't in the folder yet | It's waiting: the screen shows *waiting*; opening Cloud storage saves one at a time. |
+| Set it up (each environment) | Company profile → Cloud storage → **Connect** Google Drive once (the account that owns the folders) → **Create Invoice folder** → tick *Save every Delivered invoice* → **Save archive settings**. Photo folders: share each Drive folder with the photo reader's address (shown) as Viewer → **Add photo folder** → paste the link → **Check and save**. |
+| "Needs reconnecting" (email from Email Alerts, `CLOUD-RECONNECT`) | Cloud storage → **Reconnect** with the same account. Waiting saves go through on the next Delivered saves or when the screen is opened. |
+| Saves failed (`ARCHIVE-UPLOAD-FAILED`, alert) | Cloud storage lists them with the reason: fix it (reconnect, Invoice folder deleted → Create it again, account full), then **Retry failed**. **Discard** gives up on one (its PDF is kept, so Retry still works). |
+| An invoice isn't in the folder yet | It's saved when marked Delivered. Waiting: the screen shows *waiting*; opening Cloud storage saves one at a time. Missing (e.g. the browser closed before the save): the invoice page's **Save again**. |
+| A photo folder doesn't open for senders (`PHOTO-SOURCE-UNAVAILABLE`) | Cloud storage → Photo folders → **Check** says why; usually the folder was unshared from the photo reader: share it again as Viewer. Computer photos keep working. |
 | Move to a company account later | Connect the new account (Reconnect), **Create Invoice folder** there; new saves go to it; old files stay where they are. |
 
 ---
@@ -1591,8 +1612,9 @@ the app.
 ## 14. Open items / not yet done
 
 - Cloud storage (plan/cloud-drive-integration): **R1 built 20 Nov 2026** (adaptive compression, iPhone HEIC,
-  10 MB / 20 photos, privacy and terms pages); **R2 invoice archive built 20 Nov 2026** (Google Drive). Next: R3 photo
-  picker; then the OneDrive and Zoho WorkDrive adapters once the owner configures them.
+  10 MB / 20 photos, privacy and terms pages); **R2 invoice archive built 20 Nov 2026** (Google Drive; since the same
+  evening saved when Delivered, flat in the buyer's folder); **R3 photo folders built 20 Nov 2026** (Google Drive). Next:
+  the OneDrive and Zoho WorkDrive adapters once the owner configures them.
 
 - Key Vault centralization for the SQL password (§11) — architecture decided, not yet built.
 - Custom domain (19 Nov 2026): production's own domain (DNS CNAME at the registrar, portal Custom domains step,
