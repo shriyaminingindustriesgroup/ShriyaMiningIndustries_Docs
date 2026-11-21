@@ -387,7 +387,9 @@ flowchart LR
   and <em>Retry failed</em>. New module <code>Modules.Media</code>; the test-data refresh empties its caches (<code>clear</code>).</p>
   <p><strong>Phones and tablets (21 Nov):</strong> every screen fits iPhone, iPad, Samsung Tab and laptop screens:
   the menu folds behind <em>Menu</em> under 1100 px, wide tables scroll inside their box, toolbars wrap instead of
-  overlapping, and text boxes are 16 px on touch screens so Safari doesn't zoom. Checked at 11 widths from 360 to 1920 px.</p>
+  overlapping, and text boxes are 16 px on touch screens so Safari doesn't zoom. Checked at 11 widths from 360 to 1920 px.
+  <strong>This is the standard for every UI change from now on</strong> (ARCHITECTURE §7.9): <code>npm run check:devices</code>
+  opens every screen at all 11 widths before a release.</p>
   <p><strong>Photo folders (20 Nov):</strong> <em>Add photos ▾</em> in the send pop-up also offers the Google Drive
   folders an Admin set up (Cloud storage → Photo folders: paste the link, <em>Check and save</em>). A picker shows the
   images newest first with thumbnails; the app reads the folders with its own read-only photo reader (a Google service

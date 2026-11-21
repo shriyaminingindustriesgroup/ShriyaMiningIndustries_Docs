@@ -980,8 +980,8 @@ the build and tests; the rest is reviewed. Each rule exists because of a real pr
 - [ ] Calls go through the shared API client (it adds the CSRF header and reads paged lists); font sizes
   from the theme tokens (a test checks) and colours from the theme too; every screen says what's happening (loading, empty,
   error) instead of going blank.
-- [ ] **Every screen works on phones, tablets and computers** (owner, 21 Nov 2026: used on iPhone, iPad, Samsung Tab
-  and laptops). Nothing wider than the screen or cut off at 360, 390, 430 (phones), 768, 800, 820 (tablets portrait),
+- [ ] **Every screen works on phones, tablets and computers: §7.9 is the standard** (owner, 21 Nov 2026: used on
+  iPhone, iPad, Samsung Tab and laptops; `npm run check:devices` passes). Nothing wider than the screen or cut off at 360, 390, 430 (phones), 768, 800, 820 (tablets portrait),
   1024, 1180, 1280 (tablets landscape), 1366, 1920 px. Rules that make it so: the main menu folds behind *Menu* under
   1100 px; `.page-stack` is one `minmax(0, 1fr)` column and scroll boxes (`.table-wrap`, `.table-scroll`, …) have
   `min-width: 0`, so a wide table scrolls inside its box instead of widening the page (grid and flex items otherwise
@@ -1001,6 +1001,56 @@ the build and tests; the rest is reviewed. Each rule exists because of a real pr
 - [ ] Docs in the same session: this file (and its §7.8 if a new rule is learned) and `index.html`.
 
 ---
+
+### 7.9 Every screen on every device (the UI standard, 21 Nov 2026)
+
+The owner and staff use the app on **phones (iPhone, Android), tablets (iPad, Samsung Tab, held either way) and
+computers**. So every UI change — a new screen, a new pop-up, a new column, a restyle — must work on all of them
+before it is released. This is part of "done", like the tests: a change that only works on a laptop is not finished.
+
+**The sizes it must work at** (CSS pixels, the width the browser reports):
+
+| Device | Widths checked |
+|---|---|
+| Phones | 360 (small Android), 390 (iPhone), 430 (large phones) |
+| Tablets, portrait | 768 (iPad mini), 800 (Samsung Tab), 820 (iPad Air) |
+| Tablets, landscape | 1024 (iPad), 1180 (iPad Air), 1280 (Samsung Tab) |
+| Computers | 1366 (laptop), 1920 (desktop) |
+
+**What "works" means**
+- Nothing is wider than the screen: the page never slides sideways, and nothing is cut off at the right edge.
+- Nothing overlaps: buttons, titles, status steps and menus never sit on top of each other (the 21 Nov bug: the
+  editor's Save button covered the invoice title on an iPhone).
+- Everything can be reached and tapped: the menu, every action, every pop-up's buttons.
+- Wide tables keep readable columns and **scroll sideways inside their own box**; they are never squeezed into
+  slivers and never widen the page.
+
+**The rules that make it so** (follow them; the shared styles already do most of it)
+- **Menu:** under 1100 px the main menu folds behind the *Menu* button (`MainLayout.vue`). Don't add menu items
+  that only fit a wide bar.
+- **Layout:** put a screen's content in `.page-stack` (one `minmax(0, 1fr)` column). Any grid or flex item that holds a
+  wide table needs `min-width: 0` (grid and flex items otherwise grow to their content and widen the page). Wrap wide
+  tables in a scroll box (`.table-wrap`, `.table-scroll` or your own with `overflow-x: auto; min-width: 0`) and give
+  the table a sensible `min-width` so its columns stay readable.
+- **Bars and toolbars:** `flex-wrap: wrap`, never a fixed two-column grid that squeezes the title; under 900 px put
+  the actions on their own row. Don't pin (sticky/fixed) a tall bar on small screens: it hides half a phone screen.
+- **Pop-ups (modals):** `width: min(100%, …)`, `max-height` with scrolling inside, buttons that wrap.
+- **Touch:** text boxes are 16 px on touch screens (`--font-size-input-touch`, set in `ui.css`; under 16 px iOS
+  Safari zooms the page on every tap) and buttons at least 2.5rem tall. Don't rely on hover to show anything
+  important (tablets have no hover).
+- **Breakpoints used:** 1099 px (menu folds, tables scroll in their box), 900 px (bars stack), 700 px (phones).
+- Font sizes and colours still come from the theme tokens (§7.8).
+
+**How to check (before every UI release)**
+1. `npm run check:devices` in the UI repo (scripts/device-check): it starts a sample-data API, the app and a headless
+   Edge/Chrome, opens **every screen at all 11 widths** and fails if any page is wider than the screen or cuts
+   something off; screenshots of problems go to `device-check-out/`. `npm run check:devices -- invoices 390,820`
+   checks some screens at some widths; `SHOTS=1` screenshots every screen.
+2. Look at the screenshots of the screens you changed at a phone, a tablet portrait and a tablet landscape width
+   (overlaps aren't measured, only seen).
+3. A new screen: add its route to `routes` in `sweep.mjs`, and its data to `mock-api.mjs` if it shows an error state
+   there (made-up sample data only).
+4. On a real phone or tablet when the change is big (the browser's device mode is a good second best).
 
 ## 8. Authentication & authorization
 
