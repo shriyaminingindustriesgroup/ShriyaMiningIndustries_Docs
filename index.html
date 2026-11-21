@@ -380,11 +380,12 @@ flowchart LR
   included (setting <code>EMAIL_MAX_ATTACHMENTS_MB</code>; 3 MB automatically with Microsoft 365). The photos go to
   everyone on the email but aren't stored: only their names, sizes and fingerprints are listed on the Buyer
   approval card. Public <code>/privacy</code> and <code>/terms</code> pages back the Google Drive sign-in (20 Nov).</p>
-  <p><strong>Invoice archive (20 Nov):</strong> when an invoice is marked <em>Delivered</em>, its PDF is saved to
-  Google Drive straight in the buyer's folder, <code>Invoice / Buyer / Invoice_26_MMDDYYYYHHMMSS.pdf</code> (the invoice's
-  own file name and the India time it was marked Delivered; marked Delivered again: a new file, earlier ones stay). Company profile → Cloud storage: connect once, <em>Create Invoice folder</em>, switch on.
-  The invoice page makes the PDF and saves it in a separate call after the status change, with a queue, retries, alerts
-  and <em>Retry failed</em>. New module <code>Modules.Media</code>; the test-data refresh empties its caches (<code>clear</code>).</p>
+  <p><strong>Invoice and PO archive (21 Nov):</strong> every status change saves the invoice's PDF to Google Drive as
+  <code>Invoice / Buyer / 2026 / Invoice_22_InReview_11212026111123.pdf</code> and moves the previous status's file to the
+  bin, so only the latest stays (year = the financial year of the invoice date, from 1 April, configurable). Every
+  uploaded PO file, as uploaded, goes to <code>PO's / Buyer / 2026 / PO_Buyer_time.xlsx</code>. The status change records
+  the save in the same transaction; the browser sends the PDF; a buyer's email decision reuses the kept PDF. Nothing of
+  the email (PDF, photos) is saved any more.</p>
   <p><strong>Phones and tablets (21 Nov):</strong> every screen fits iPhone, iPad, Samsung Tab and laptop screens:
   the menu folds behind <em>Menu</em> under 1100 px, wide tables scroll inside their box, toolbars wrap instead of
   overlapping, and text boxes are 16 px on touch screens so Safari doesn't zoom. Checked at 11 widths from 360 to 1920 px.
