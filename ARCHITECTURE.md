@@ -980,6 +980,14 @@ the build and tests; the rest is reviewed. Each rule exists because of a real pr
 - [ ] Calls go through the shared API client (it adds the CSRF header and reads paged lists); font sizes
   from the theme tokens (a test checks) and colours from the theme too; every screen says what's happening (loading, empty,
   error) instead of going blank.
+- [ ] **Every screen works on phones, tablets and computers** (owner, 21 Nov 2026: used on iPhone, iPad, Samsung Tab
+  and laptops). Nothing wider than the screen or cut off at 360, 390, 430 (phones), 768, 800, 820 (tablets portrait),
+  1024, 1180, 1280 (tablets landscape), 1366, 1920 px. Rules that make it so: the main menu folds behind *Menu* under
+  1100 px; `.page-stack` is one `minmax(0, 1fr)` column and scroll boxes (`.table-wrap`, `.table-scroll`, …) have
+  `min-width: 0`, so a wide table scrolls inside its box instead of widening the page (grid and flex items otherwise
+  grow to their content); bars and toolbars wrap (`flex-wrap`) instead of overlapping, and aren't pinned on small
+  screens; on touch screens text boxes are 16 px (`--font-size-input-touch`, else iOS Safari zooms on every tap) and
+  buttons at least 2.5rem tall.
 - [ ] `npm run type-check`, `npm run test` and `npm run build` pass.
 
 **Tests and release**
@@ -1266,8 +1274,9 @@ or per-invoice folders, no photos, no decision copy, and nothing is saved when a
   `/admin/company-profile?tab=cloud&…` (the sign-in cookie is SameSite=Strict, so it isn't sent on Google's redirect);
   the page finishes with `POST console/cloud-connections/google/complete` (state, same Admin, 10 minutes). The return
   address is built only from `SiteAddresses`.
-- **Queue** (V051, V054, `R__platform-14`): the invoice page makes the PDF in the browser (PDFs are client-side, §12)
-  right after the status change to Delivered and calls `POST invoices/{id}/archive` (`invoice.status`) with it — a
+- **Queue** (V051, V054, `R__platform-14`): the screen that moved the invoice to Delivered — the invoice editor's status
+  box, the edit form, or the invoice view page (all through `services/invoice-archive.ts`) — makes the PDF in the
+  browser (PDFs are client-side, §12) right after the status change to Delivered and calls `POST invoices/{id}/archive` (`invoice.status`) with it — a
   **separate call**, so a slow cloud never delays the status change. `usp_InvoiceArchiveTask_QueueDelivered` keeps the PDF
   in `app.InvoiceArchiveTask` (kind *Delivered*, one row per save, so every save is kept; refused unless the invoice is
   Delivered), then the same call saves it (30 s budget; Static Web Apps ends calls at 45 s) plus one more
