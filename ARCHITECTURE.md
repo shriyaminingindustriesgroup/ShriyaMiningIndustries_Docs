@@ -1052,6 +1052,20 @@ before it is released. This is part of "done", like the tests: a change that onl
    there (made-up sample data only).
 4. On a real phone or tablet when the change is big (the browser's device mode is a good second best).
 
+### 7.10 Brand and installable app (22 Nov 2026)
+
+- **Brand:** a serif **S** monogram in sandstone over the gold rule, on the header's dark earth (owner's choice: a logo
+  from the name; **MINING** in small capitals under the S on the larger icons). Made by `scripts/brand/make_brand.py`
+  (SVG sources) and `render_pngs.mjs` (exact PNG sizes, headless Edge/Chrome); colours from `theme.css`.
+- **Deployed icons** (`public/`): `favicon.svg` (tab; also the header and sign-in tile), `icon-192.png`, `icon-512.png`
+  (home screens, installed app, `apple-touch-icon`). Earlier renders (maskable, 16/32 px, logo lock-ups) are kept
+  locally in `public/old/` (git-ignored, not deployed).
+- **Installable:** `public/manifest.json` (name, short name, standalone, colours, icons) and `public/sw.js`, registered
+  by `src/main.ts` in built sites only. The service worker **caches nothing** (a fetch handler that never answers): a
+  release shows at once and nothing signed-in stays in a cache. `staticwebapp.config.json` serves `sw.js` and
+  `manifest.json` with `Cache-Control: no-cache`; the fallback route excludes `*.json, *.js, *.svg, *.png`. The smoke
+  test checks they're served as themselves.
+
 ## 8. Authentication & authorization
 
 **Our own sign-in (login plan Epic 2, V043, 18 Nov 2026; password only for now, plan decision D16).**
