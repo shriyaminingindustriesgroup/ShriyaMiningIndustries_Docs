@@ -120,7 +120,7 @@
     <text x="316" y="170" class="xs">app.shriyamining.com</text>
     <rect x="316" y="182" width="330" height="96" rx="8" fill="#fff" stroke="#2e7d4f"/>
     <text x="330" y="204" class="t">Vue 3 web app (the screens)</text>
-    <text x="330" y="224" class="s">Invoice PDF made in the browser</text>
+    <text x="330" y="224" class="s">Insights dashboard · invoice PDF in browser</text>
     <text x="330" y="241" class="s">Excel PO import · photo compression</text>
     <text x="330" y="258" class="s">Installable (manifest + service worker)</text>
     <rect x="316" y="290" width="330" height="176" rx="8" fill="#fff" stroke="#2e7d4f"/>
@@ -327,6 +327,7 @@
       <ol>
         <li><b>Sign-in:</b> staff open app.shriyamining.com → email + password checked by the API (PBKDF2 + secret pepper) → session cookie (HttpOnly, 60 min idle, 12 h max) → every API call checks role and permission.</li>
         <li><b>Invoice to buyer:</b> staff build the invoice from POs → the browser makes the PDF → API saves it and emails the buyer through Zoho with a private review link → buyer opens <code>/review</code>, approves or rejects → status and history update; the staff see it at once.</li>
+        <li><b>Insights:</b> the proprietor opens Insights → one call to the API → five read-only procedures work out totals, pipeline, attention, buyers and shipping from the live data → every figure links to its list. Nothing runs on a timer.</li>
         <li><b>Archive to Drive:</b> any status change writes a "save" task in the same database step → the browser sends the PDF → API uploads it to <code>Invoice/Buyer/Year</code> and moves the previous status's file to the bin. Uploaded POs go to <code>PO's/Buyer/Year</code>. Failures are listed with Retry and raise an alert.</li>
         <li><b>A change reaching users:</b> developer pushes to <code>test</code> → pipeline tests, migrates the test database, deploys, smoke-tests → checked on the test site → the same commit is pushed to <code>main</code> → production. Rollback = redeploy the previous release.</li>
       </ol>
