@@ -1330,6 +1330,9 @@ photo folders (live and test) as Viewer. App settings in **both** environments: 
 base64), `CLOUD_TOKEN_ENCRYPTION_KEY` (secret: encrypts stored connections; **different per environment; changing it
 means reconnecting**). OneDrive and Zoho WorkDrive follow the same pattern later (`CLOUD_ONEDRIVE_*`, `CLOUD_ZOHO_*`). These belong in the Key Vault plan below with the SQL password.
 
+**Google Drive setup, step by step** (Google Cloud project, `drive.file` client, `photo-reader` service account, the four
+Azure settings with the PowerShell used, connecting in the app, problems hit): [documents/Google-Drive-Setup.md](documents/Google-Drive-Setup.md).
+
 **Invoice and PO archive (owner, 21 Nov 2026; plan/invoice-archive-by-status, V056, V057):**
 - **Invoices:** every status change (and the first save, Draft) saves the invoice's PDF (as Download makes it) to the
   chosen cloud as `Invoice / <Buyer> / <Year> / Invoice_22_InReview_11212026111123.pdf` (name, status, India time of the
