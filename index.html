@@ -388,9 +388,9 @@ flowchart LR
   the email (PDF, photos) is saved any more.</p>
   <p><strong>Brand and installable app (22 Nov):</strong> a serif <em>S</em> monogram over a gold rule (with
   <em>MINING</em> on the larger icons) is the tab icon, header tile and home-screen icon; <code>manifest.json</code> and a
-  service worker that caches nothing make the app installable on phones, tablets and computers.</p>
+  service worker that caches nothing make the app installable on phones, tablets and computers. Step by step, checks and how to send it to users: <a href="https://github.com/shriyaminingindustriesgroup/ShriyaMiningIndustries_Docs/blob/main/documents/Installable-App-PWA.md">Installable app (PWA)</a>.</p>
   <p><strong>Phones and tablets (21 Nov):</strong> every screen fits iPhone, iPad, Samsung Tab and laptop screens:
-  the menu folds behind <em>Menu</em> under 1100 px, wide tables scroll inside their box, toolbars wrap instead of
+  the top bar stays on screen while a page scrolls (22 Nov), the menu folds behind <em>Menu</em> under 1100 px, wide tables scroll inside their box, toolbars wrap instead of
   overlapping, and text boxes are 16 px on touch screens so Safari doesn't zoom. Checked at 11 widths from 360 to 1920 px.
   <strong>This is the standard for every UI change from now on</strong> (ARCHITECTURE §7.9): <code>npm run check:devices</code>
   opens every screen at all 11 widths before a release.</p>

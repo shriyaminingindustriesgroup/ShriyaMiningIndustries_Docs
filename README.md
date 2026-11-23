@@ -4,6 +4,7 @@ Living reference for the invoice platform's architecture, infrastructure, pipeli
 debugging notes.
 
 - **[ARCHITECTURE.md](./ARCHITECTURE.md)** — the full source of truth. Read this first.
+- **[Installable app (PWA)](./documents/Installable-App-PWA.md)** — how the site became a phone/tablet/desktop app, the checks, and how to send it to users.
 - **[Published page](https://shriyaminingindustriesgroup.github.io/ShriyaMiningIndustries_Docs/)** — the same content, diagram-first, via GitHub Pages.
 
 **Just cloned the API repo and want to run it locally?** Go straight to

@@ -1028,6 +1028,12 @@ before it is released. This is part of "done", like the tests: a change that onl
 **The rules that make it so** (follow them; the shared styles already do most of it)
 - **Menu:** under 1100 px the main menu folds behind the *Menu* button (`MainLayout.vue`). Don't add menu items
   that only fit a wide bar.
+- **Top bar always on screen** (owner, 22 Nov 2026): the header is `position: sticky; top: 0; z-index: 40` on every
+  page and device. `MainLayout.vue` publishes its real height as `--app-header-h`; a page's own sticky bar uses
+  `top: var(--sticky-top)` (theme.css) so it sits just under the top bar, never `top: 0`, and stays at `z-index` ≤ 30.
+  Pop-ups and dialogs stay at ≥ 50, so they cover it. `html { scroll-padding-top }` keeps a field you jump to from
+  landing behind it. An open phone menu scrolls inside itself. `npm run check:devices` fails a screen whose top bar
+  scrolls away.
 - **Layout:** put a screen's content in `.page-stack` (one `minmax(0, 1fr)` column). Any grid or flex item that holds a
   wide table needs `min-width: 0` (grid and flex items otherwise grow to their content and widen the page). Wrap wide
   tables in a scroll box (`.table-wrap`, `.table-scroll` or your own with `overflow-x: auto; min-width: 0`) and give
@@ -1065,6 +1071,9 @@ before it is released. This is part of "done", like the tests: a change that onl
   release shows at once and nothing signed-in stays in a cache. `staticwebapp.config.json` serves `sw.js` and
   `manifest.json` with `Cache-Control: no-cache`; the fallback route excludes `*.json, *.js, *.svg, *.png`. The smoke
   test checks they're served as themselves.
+- **Step-by-step record, checks and how to send the app to users** (WhatsApp, Android/iPhone/computer install steps,
+  optional PWABuilder `.apk`): [documents/Installable-App-PWA.md](documents/Installable-App-PWA.md). The manifest lists
+  the PNG icons only (23 Nov 2026: the SVG gave a DevTools warning).
 
 ## 8. Authentication & authorization
 
