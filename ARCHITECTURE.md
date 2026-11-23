@@ -1004,6 +1004,8 @@ the build and tests; the rest is reviewed. Each rule exists because of a real pr
   together, release the side that accepts both shapes first.
 - [ ] Cost: $0 unless agreed; prices from the Azure Retail Prices API before adding anything; no keep-alive
   calls to the database.
+- [ ] Errors (§7.11): people see a plain message, never technical text (screens show `error.message` or `messageOf()`);
+  a new error gets a code and a `log.ErrorCode` row with its user and technical messages.
 - [ ] Docs in the same session: this file (and its §7.8 if a new rule is learned) and `index.html`. A new or changed
   component or outside connection also updates the picture and table in `documents/App-Architecture.html`.
 
@@ -1081,6 +1083,53 @@ before it is released. This is part of "done", like the tests: a change that onl
 - **Step-by-step record, checks and how to send the app to users** (WhatsApp, Android/iPhone/computer install steps,
   optional PWABuilder `.apk`): [documents/Installable-App-PWA.md](documents/Installable-App-PWA.md). The manifest lists
   the PNG icons only (23 Nov 2026: the SVG gave a DevTools warning).
+
+### 7.11 Error messages: what people see, what the logs keep (23 Nov 2026)
+
+**Rule:** people see a plain business message, never technical text. Text such as "Request failed with status code 500",
+a stack trace or a SQL error is never shown. The technical detail goes to the logs under a **reference**: the first 8
+characters of the request's `X-Correlation-ID`. A person quotes the reference, and Admin → Error logs finds it.
+
+**How a failure becomes a message.** The UI's `services/error-messages.ts` (`friendlyError`, tested) does this inside the
+shared API client, so every screen gets it. A screen shows `error.message`, or `messageOf(cause, fallback)` for anything
+it caught.
+
+1. **The API answered with its own error** (`{ error: { code, message, referenceId } }`, ErrorHandlingMiddleware).
+   - Its message is written for people and is shown as it is.
+   - Each code's user message, technical message, likely cause, where to look and how to fix are in `log.ErrorCode`.
+   - The API has already logged the failure in `log.ErrorLog` (Layer API or Database).
+2. **No error details came back.** The hosting layer answered instead of the API's code (a time-out or a restart), or
+   nothing came back at all.
+   - The browser shows a message by the kind of failure (table below).
+   - For server-side failures it **reports the failure** with `POST /api/client-errors` (signed-in users only; at most
+     20 per page load and one per screen call a minute).
+   - The report is logged in `log.ErrorLog` with **Layer Client**, a `CLIENT-*` code (catalogued in V059), the user,
+     the path, the screen, the technical text and the browser.
+
+| What happened (technical) | Code logged | What the person sees (business) | Reference shown | Logged by |
+|---|---|---|---|---|
+| API error with its own code and message (validation 400, not found 404, conflict 409, rules 422…) | the API's code (e.g. `INV-UPDATE-409`) | the API's message, e.g. "Someone else changed this invoice. Reload and try again." | 5xx only | API |
+| API's unexpected error `API-ERROR-500` | `API-ERROR-500` | "Something went wrong on our side. Please try again. If it keeps happening, tell your Admin: reference 1A2B3C4D." | yes | API |
+| Database waking (503 `DB-WAKING-503`) | — (retried for 90 s) | the layout's strip "Waking up the database… this usually takes under a minute.", then "The database is taking longer than usual to start. Please try again in a minute." | no | API |
+| 500/503 with **no** details (hosting time-out or restart) | `CLIENT-NO-REPLY` | "The server had a problem answering. Please try again in a moment. If it keeps happening, tell your Admin: reference …" | yes | browser → `client-errors` |
+| 502 / 504 from the site front end | `CLIENT-BAD-GATEWAY` | "The server isn't answering right now. Please try again in a moment. …reference …" | yes | browser → `client-errors` |
+| No answer within 50 s (browser time-out) | `CLIENT-TIMEOUT` | "The server is taking too long to answer. Please try again in a moment. …reference …" | yes | browser → `client-errors` |
+| No connection at all | — (can't be sent) | "Can't reach the server. Check your internet connection and try again." | no | — |
+| 401 with no details | — | "Your session has ended. Please sign in again." (the layout offers Log in again) | no | — |
+| 403 with no details | — | "You don't have permission to do this. Ask an Admin if you need it." | no | — |
+| 404 with no details | — | "We couldn't find that. It may have been moved or deleted." | no | — |
+| 413 | — | "That's too large to send. Try a smaller file or fewer photos." | no | — |
+| 429 | — | "Too many requests at once. Please wait a moment and try again." | no | — |
+| Any other 4xx with no details | — | "That couldn't be done. Please check what you entered and try again." | no | — |
+
+**Finding a reference:** Admin → Error logs → search the reference (the search matches the start of the correlation ID).
+The row shows the layer, the code with its catalogue text, the user, the path and the technical detail. The same
+correlation ID finds the request in Application Insights and in Payload logs.
+
+**Adding a new error:**
+- Give it a stable code and a catalogue row in `log.ErrorCode` (a `V###` migration) with a message written for people.
+- Throw it as the app's exception, never as raw text.
+- A new browser-side code also goes in `ClientErrorService.Codes` and `ClientErrorCode`.
 
 ## 8. Authentication & authorization
 
