@@ -988,8 +988,8 @@ the build and tests; the rest is reviewed. Each rule exists because of a real pr
   error) instead of going blank.
 - [ ] **Every screen works on phones, tablets and computers: §7.9 is the standard** (owner, 21 Nov 2026: used on
   iPhone, iPad, Samsung Tab and laptops; `npm run check:devices` passes). Nothing wider than the screen or cut off at 360, 390, 430 (phones), 768, 800, 820 (tablets portrait),
-  1024, 1180, 1280 (tablets landscape), 1366, 1920 px. Rules that make it so: the main menu folds behind *Menu* under
-  1100 px; `.page-stack` is one `minmax(0, 1fr)` column and scroll boxes (`.table-wrap`, `.table-scroll`, …) have
+  1024, 1180, 1280 (tablets landscape), 1366, 1920 px. Rules that make it so: the B+ navigation is the same on every device (one row of
+  section tabs that swipes on narrow screens, All ▾ pinned at its end); `.page-stack` is one `minmax(0, 1fr)` column and scroll boxes (`.table-wrap`, `.table-scroll`, …) have
   `min-width: 0`, so a wide table scrolls inside its box instead of widening the page (grid and flex items otherwise
   grow to their content); bars and toolbars wrap (`flex-wrap`) instead of overlapping, and aren't pinned on small
   screens; on touch screens text boxes are 16 px (`--font-size-input-touch`, else iOS Safari zooms on every tap) and
@@ -1035,8 +1035,17 @@ before it is released. This is part of "done", like the tests: a change that onl
   slivers and never widen the page.
 
 **The rules that make it so** (follow them; the shared styles already do most of it)
-- **Menu:** under 1100 px the main menu folds behind the *Menu* button (`MainLayout.vue`). Don't add menu items
-  that only fit a wide bar.
+- **Navigation, B+ (owner, 23 Nov 2026; plan/navigation-redesign; `MainLayout.vue`):** the same on every device.
+  - **Top row:** the name, and **My account ▾** on the right. My account holds Profile, Change password
+    (`/account#password`), Recent sign-ins (`/account#sign-ins`) and **Log out**. Only the initial shows under 600 px.
+  - **Tab row below:** every section the person may use (Insights, Purchase Orders, Invoices, Tracking), in the
+    order of the work. **All ▾** is pinned at the end: it lists every section and the **Admin** pages, as a panel on
+    computers and as a bottom sheet on phones.
+  - **Narrow screens:** the row swipes sideways with a fade on the right, and the open tab scrolls into view. Phones
+    show short labels (`short`: "POs"). Tabs are at least 44 px tall.
+  - **A new section** is one entry in `tabs` (with its permission). A new admin page is one entry in `adminItems`.
+    There's no Menu button.
+  - **Links to part of a page** (`/account#password`) scroll to it below the fixed header (router `scrollBehavior`).
 - **Top bar always on screen** (owner, 22 Nov 2026): the header is `position: sticky; top: 0; z-index: 40` on every
   page and device. `MainLayout.vue` publishes its real height as `--app-header-h`; a page's own sticky bar uses
   `top: var(--sticky-top)` (theme.css) so it sits just under the top bar, never `top: 0`, and stays at `z-index` ≤ 30.
