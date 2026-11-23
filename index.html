@@ -397,6 +397,7 @@ flowchart LR
   overlapping, and text boxes are 16 px on touch screens so Safari doesn't zoom. Checked at 11 widths from 360 to 1920 px.
   <strong>This is the standard for every UI change from now on</strong> (ARCHITECTURE §7.9): <code>npm run check:devices</code>
   opens every screen at all 11 widths before a release.</p>
+  <p><strong>Error messages (23 Nov):</strong> when something fails, people see a plain message ("The server had a problem answering. Please try again in a moment.") and a short reference to quote, never technical text. Failures the API never saw (a time-out in front of it) are reported by the browser and logged too, so Admin → Error logs finds every one by its reference (ARCHITECTURE §7.11 maps each technical failure to its message).</p>
   <p><strong>Insights (23 Nov):</strong> a dashboard for the people who run the business (Admin, Manager): invoiced and delivered against the previous period, money in each stage, the PO backlog, what needs attention (waiting for the buyer, rejected, not shipped, late or untouched POs), top buyers and products, what's ready to ship or on the water, and destinations. Every figure links to its list; worked out on request from the app's own data, so it adds no cost.</p>
   <p><strong>Photo folders (20 Nov):</strong> <em>Add photos ▾</em> in the send pop-up also offers the Google Drive
   folders an Admin set up (Cloud storage → Photo folders: paste the link, <em>Check and save</em>). A picker shows the
