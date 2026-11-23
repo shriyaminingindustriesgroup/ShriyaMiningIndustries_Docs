@@ -496,7 +496,7 @@ flowchart LR
     (pages, the sign-in cookie, CSRF, admin protection, test-only endpoint closed in production).</li>
     <li><strong>Uptime check</strong> every hour (Docs repo workflow): <code>/api/ping</code> and the sign-in page only, so the
     database is never woken.</li>
-    <li><strong>Which build is live:</strong> <code>/api/ping</code> and the app's footer show the commit and environment.</li>
+    <li><strong>Which build is live:</strong> <code>/api/ping</code>, Admin → Health and the hover text of the app's footer (which shows © Shriya Mining Industries) give the commit and environment.</li>
     <li><strong>Test data from production:</strong> the <em>Refresh test data from production</em> workflow (API repo), on a
     schedule or on demand; runbook in ARCHITECTURE.md §12.2.</li>
   </ul>
