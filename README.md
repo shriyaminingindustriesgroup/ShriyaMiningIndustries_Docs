@@ -4,6 +4,7 @@ Living reference for the invoice platform's architecture, infrastructure, pipeli
 debugging notes.
 
 - **[ARCHITECTURE.md](./ARCHITECTURE.md)** — the full source of truth. Read this first.
+- **[Google Drive setup](./documents/Google-Drive-Setup.md)** — how the app is linked to Google Drive (saving invoices and PO files, reading photo folders) and every setup step, link and PowerShell command.
 - **[Installable app (PWA)](./documents/Installable-App-PWA.md)** — how the site became a phone/tablet/desktop app, the checks, and how to send it to users.
 - **[Published page](https://shriyaminingindustriesgroup.github.io/ShriyaMiningIndustries_Docs/)** — the same content, diagram-first, via GitHub Pages.
 
