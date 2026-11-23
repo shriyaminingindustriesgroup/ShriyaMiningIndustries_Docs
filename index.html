@@ -212,6 +212,9 @@
 
 <section id="architecture">
   <h2>Architecture</h2>
+  <p><strong>The whole system as one picture:</strong> <a href="documents/App-Architecture.html">App architecture</a>, which
+  shows both environments, the databases, monitoring, every outside service (Zoho Mail, Google Drive, the photo reader,
+  Have I Been Pwned, Microsoft sign-in, DNS) and GitHub, with a table of each connection on page 2 (prints on 2 pages).</p>
   <p>The Static Web App's <strong>co-located</strong> Functions — not the standalone Function
   Apps — serve 100% of real traffic. Each SWA environment gets its own private copy of the API's
   compiled build. The standalone Function Apps are kept, stopped (since 17 Nov 2026, not deleted), as a

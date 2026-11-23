@@ -1,0 +1,351 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>App Architecture</title>
+<style>
+  :root {
+    --ink: #2b2018; --muted: #6b5a4a; --line: #b8a888; --paper: #fbf8f3; --card: #ffffff;
+    --earth: #4a3828; --terracotta: #a85c3c; --gold: #b8862e; --olive: #6b7052;
+    --azure: #1f5f99; --azure-bg: #eaf2fa; --prod: #2e7d4f; --prod-bg: #eaf5ee; --test: #8a5a00; --test-bg: #fdf3e1;
+    --ext: #6a3f8f; --ext-bg: #f3ecf9; --gh: #24292f; --gh-bg: #eef0f2; --people-bg: #f6ede2;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #e9e4dc; color: var(--ink); font: 14px/1.45 "Segoe UI", Arial, sans-serif; }
+  .page { width: min(1400px, 100% - 24px); margin: 16px auto; padding: 22px 26px; background: var(--paper); border-radius: 10px;
+          box-shadow: 0 2px 10px rgb(0 0 0 / 12%); }
+  header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 18px; border-bottom: 3px solid var(--gold); padding-bottom: 8px; margin-bottom: 12px; }
+  h1 { margin: 0; font: 700 24px Georgia, "Times New Roman", serif; color: var(--earth); }
+  h2 { margin: 16px 0 6px; font: 700 17px Georgia, serif; color: var(--earth); }
+  .sub { color: var(--muted); }
+  svg { width: 100%; height: auto; display: block; }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 8px; color: var(--muted); font-size: 12.5px; }
+  .sw { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -1px; margin-right: 5px; border: 1.5px solid; }
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; background: var(--card); }
+  th, td { text-align: left; vertical-align: top; padding: 5px 8px; border-bottom: 1px solid #e4dccf; }
+  th { background: #efe7da; color: var(--muted); font-weight: 600; }
+  td:first-child { font-weight: 600; white-space: nowrap; }
+  .cols { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 18px; }
+  .flows ol { margin: 4px 0 0; padding-left: 20px; }
+  .flows li { margin-bottom: 4px; }
+  .note { font-size: 12px; color: var(--muted); margin-top: 10px; }
+  code { font: 12px Consolas, monospace; background: #f1ebe1; padding: 0 3px; border-radius: 3px; }
+  @media (max-width: 900px) { .cols { grid-template-columns: minmax(0, 1fr); } .page { padding: 14px 16px; } }
+  @page { size: A4 landscape; margin: 8mm; }
+  @media print {
+    body { background: #fff; }
+    .page { width: auto; margin: 0; box-shadow: none; border-radius: 0; padding: 0; break-after: page; }
+    .page:last-child { break-after: auto; }
+    header { padding-bottom: 4px; margin-bottom: 6px; }
+    h1 { font-size: 18px; }
+    .sub { font-size: 11px; }
+    svg { width: auto; height: 168mm; margin: 0 auto; }
+    .legend { font-size: 9.5px; margin-top: 4px; }
+    table, .flows { font-size: 9.5px; }
+    th, td { padding: 2.5px 6px; }
+    h2 { font-size: 13px; margin: 8px 0 3px; }
+    .flows li { margin-bottom: 2px; }
+    .note { font-size: 9px; margin-top: 6px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ============================ PAGE 1: THE PICTURE ============================ -->
+<section class="page">
+  <header>
+    <h1>Shriya Mining Industries · Orders &amp; Invoicing — architecture</h1>
+    <span class="sub">The whole app on one page: what runs where, and everything it is connected to · 23 Nov 2026</span>
+  </header>
+
+  <svg viewBox="0 0 1500 990" role="img" aria-label="Architecture diagram of the Shriya Mining Orders and Invoicing app">
+    <defs>
+      <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#5c5248"/></marker>
+      <marker id="ab" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#1f5f99"/></marker>
+      <marker id="ap" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6a3f8f"/></marker>
+      <marker id="ag" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#24292f"/></marker>
+      <style>
+        .t { font: 600 14px 'Segoe UI', Arial, sans-serif; fill: #2b2018; }
+        .h { font: 700 16px Georgia, serif; fill: #2b2018; }
+        .s { font: 12px 'Segoe UI', Arial, sans-serif; fill: #5c5248; }
+        .xs { font: 11px 'Segoe UI', Arial, sans-serif; fill: #5c5248; }
+        .lbl { font: 600 11.5px 'Segoe UI', Arial, sans-serif; fill: #3a2c20; paint-order: stroke; stroke: #fbf8f3; stroke-width: 4px; }
+        .w { font: 700 15px Georgia, serif; fill: #fff; }
+      </style>
+    </defs>
+
+    <!-- ---------- PEOPLE (left) ---------- -->
+    <text x="20" y="40" class="h">People</text>
+    <rect x="20" y="120" width="215" height="130" rx="12" fill="#f6ede2" stroke="#a85c3c" stroke-width="1.5"/>
+    <text x="38" y="148" class="t">Staff &amp; Admins (≈5)</text>
+    <text x="38" y="170" class="s">Phone, iPad, Samsung Tab,</text>
+    <text x="38" y="186" class="s">laptop — browser or the</text>
+    <text x="38" y="202" class="s">installed app (PWA)</text>
+    <text x="38" y="230" class="xs">POs · invoices · tracking · admin</text>
+
+    <rect x="20" y="300" width="215" height="120" rx="12" fill="#f6ede2" stroke="#a85c3c" stroke-width="1.5"/>
+    <text x="38" y="328" class="t">Buyers</text>
+    <text x="38" y="350" class="s">Get the invoice by email</text>
+    <text x="38" y="366" class="s">(sent through Zoho Mail),</text>
+    <text x="38" y="382" class="s">open link → Approve / Reject</text>
+    <text x="38" y="404" class="xs">public page /review · no login</text>
+
+    <rect x="20" y="470" width="215" height="100" rx="12" fill="#f6ede2" stroke="#a85c3c" stroke-width="1.5"/>
+    <text x="38" y="498" class="t">Company Google account</text>
+    <text x="38" y="520" class="s">Owns the Drive folders;</text>
+    <text x="38" y="536" class="s">an Admin connected it once</text>
+    <text x="38" y="556" class="xs">Drive folders → Google boxes (right)</text>
+
+    <rect x="20" y="845" width="215" height="105" rx="12" fill="#f6ede2" stroke="#a85c3c" stroke-width="1.5"/>
+    <text x="38" y="873" class="t">Developers</text>
+    <text x="38" y="895" class="s">Push to branch test → check</text>
+    <text x="38" y="911" class="s">on test site → push main</text>
+    <text x="38" y="931" class="xs">(production)</text>
+
+    <!-- ---------- AZURE (centre) ---------- -->
+    <rect x="270" y="20" width="790" height="790" rx="16" fill="#eaf2fa" stroke="#1f5f99" stroke-width="2"/>
+    <rect x="270" y="20" width="790" height="40" rx="16" fill="#1f5f99"/>
+    <rect x="270" y="44" width="790" height="16" fill="#1f5f99"/>
+    <text x="290" y="47" class="w">Microsoft Azure · resource group ShriyaMiningIndustries · Central US</text>
+
+    <!-- Static Web App -->
+    <rect x="288" y="74" width="754" height="420" rx="12" fill="#ffffff" stroke="#1f5f99" stroke-width="1.5"/>
+    <text x="304" y="98" class="t">Static Web App “ShriyaMiningIndustries-ui” · Free tier ($0)</text>
+    <text x="304" y="116" class="xs">One app, two environments. Each serves the screens AND runs its own copy of the API (co-located Functions). HTTPS, sign-in cookie, security headers.</text>
+
+    <!-- Production env -->
+    <rect x="302" y="130" width="358" height="350" rx="10" fill="#eaf5ee" stroke="#2e7d4f" stroke-width="1.5"/>
+    <text x="316" y="152" class="t" fill="#2e7d4f">PRODUCTION · branch main</text>
+    <text x="316" y="170" class="xs">app.shriyamining.com</text>
+    <rect x="316" y="182" width="330" height="96" rx="8" fill="#fff" stroke="#2e7d4f"/>
+    <text x="330" y="204" class="t">Vue 3 web app (the screens)</text>
+    <text x="330" y="224" class="s">Invoice PDF made in the browser</text>
+    <text x="330" y="241" class="s">Excel PO import · photo compression</text>
+    <text x="330" y="258" class="s">Installable (manifest + service worker)</text>
+    <rect x="316" y="290" width="330" height="176" rx="8" fill="#fff" stroke="#2e7d4f"/>
+    <text x="330" y="312" class="t">API · .NET 10 Azure Functions</text>
+    <text x="330" y="330" class="xs">/api/* · stored procedures only · Dapper</text>
+    <g class="s">
+      <rect x="330" y="340" width="100" height="26" rx="5" fill="#f4efe6" stroke="#b8a888"/><text x="341" y="358">Invoice / PO</text>
+      <rect x="438" y="340" width="96" height="26" rx="5" fill="#f4efe6" stroke="#b8a888"/><text x="448" y="358">MasterData</text>
+      <rect x="542" y="340" width="96" height="26" rx="5" fill="#f4efe6" stroke="#b8a888"/><text x="551" y="358">Notifications</text>
+      <rect x="330" y="372" width="100" height="26" rx="5" fill="#f4efe6" stroke="#b8a888"/><text x="352" y="390">Media</text>
+      <rect x="438" y="372" width="96" height="26" rx="5" fill="#f4efe6" stroke="#b8a888"/><text x="454" y="390">Accounts</text>
+      <rect x="542" y="372" width="96" height="26" rx="5" fill="#f4efe6" stroke="#b8a888"/><text x="568" y="390">Admin</text>
+    </g>
+    <text x="330" y="420" class="xs">Sign-in &amp; sessions · invoices · buyer review ·</text>
+    <text x="330" y="436" class="xs">emails · Drive archive · photos · health &amp; logs</text>
+    <text x="330" y="456" class="xs">Secrets = SWA environment settings only</text>
+
+    <!-- Test env -->
+    <rect x="670" y="130" width="358" height="350" rx="10" fill="#fdf3e1" stroke="#8a5a00" stroke-width="1.5"/>
+    <text x="684" y="152" class="t" fill="#8a5a00">TEST · branch test</text>
+    <text x="684" y="170" class="xs">gray-meadow-…-test.azurestaticapps.net</text>
+    <rect x="684" y="182" width="330" height="96" rx="8" fill="#fff" stroke="#8a5a00"/>
+    <text x="698" y="204" class="t">Same Vue 3 web app</text>
+    <text x="698" y="224" class="s">Every change is checked here first</text>
+    <text x="698" y="241" class="s">(same commit is then promoted to</text>
+    <text x="698" y="258" class="s">production — never rebuilt)</text>
+    <rect x="684" y="290" width="330" height="176" rx="8" fill="#fff" stroke="#8a5a00"/>
+    <text x="698" y="312" class="t">Same API (own copy)</text>
+    <text x="698" y="334" class="s">Own settings and secrets:</text>
+    <text x="698" y="352" class="s">own encryption key, own Drive</text>
+    <text x="698" y="370" class="s">folders (…-Test), own photo folder</text>
+    <text x="698" y="394" class="xs">Data copied from production on demand</text>
+    <text x="698" y="410" class="xs">(test-data refresh tool)</text>
+
+    <!-- SQL -->
+    <rect x="288" y="508" width="754" height="140" rx="12" fill="#ffffff" stroke="#1f5f99" stroke-width="1.5"/>
+    <text x="304" y="530" class="t">Azure SQL · server shriyaminingindustries · Serverless, free offer then pay as you go, auto-pause when idle</text>
+    <!-- prod db cylinder -->
+    <g>
+      <ellipse cx="480" cy="560" rx="120" ry="12" fill="#eaf5ee" stroke="#2e7d4f"/>
+      <path d="M360,560 v52 a120,12 0 0 0 240,0 v-52" fill="#eaf5ee" stroke="#2e7d4f"/>
+      <text x="480" y="590" text-anchor="middle" class="t">shriyaminingdb</text>
+      <text x="480" y="607" text-anchor="middle" class="xs">production data</text>
+    </g>
+    <g>
+      <ellipse cx="850" cy="560" rx="120" ry="12" fill="#fdf3e1" stroke="#8a5a00"/>
+      <path d="M730,560 v52 a120,12 0 0 0 240,0 v-52" fill="#fdf3e1" stroke="#8a5a00"/>
+      <text x="850" y="590" text-anchor="middle" class="t">shriyaminingdbtest</text>
+      <text x="850" y="607" text-anchor="middle" class="xs">test data</text>
+    </g>
+    <text x="304" y="640" class="xs">Schema by DbUp migrations (V###, run once; R__ procedures, every deploy) · app logs in tables (errors, payloads, emails, sign-ins)</text>
+
+    <!-- Monitoring -->
+    <rect x="288" y="662" width="754" height="134" rx="12" fill="#ffffff" stroke="#1f5f99" stroke-width="1.5"/>
+    <text x="304" y="684" class="t">Monitoring &amp; cost control</text>
+    <rect x="304" y="696" width="236" height="88" rx="8" fill="#f5f8fc" stroke="#9db8d4"/>
+    <text x="316" y="716" class="t">Application Insights</text>
+    <text x="316" y="734" class="s">+ Log Analytics workspace</text>
+    <text x="316" y="751" class="s">requests, errors, metrics</text>
+    <text x="316" y="768" class="xs">0.3 GB/day cap (free range)</text>
+    <rect x="552" y="696" width="236" height="88" rx="8" fill="#f5f8fc" stroke="#9db8d4"/>
+    <text x="564" y="716" class="t">6 alert rules → email</text>
+    <text x="564" y="734" class="s">error spike, failed requests,</text>
+    <text x="564" y="751" class="s">email failed, archive failed …</text>
+    <text x="564" y="768" class="xs">Action group ShriyaMiningAlerts</text>
+    <rect x="800" y="696" width="228" height="88" rx="8" fill="#f5f8fc" stroke="#9db8d4"/>
+    <text x="812" y="716" class="t">Budget $20 / month</text>
+    <text x="812" y="734" class="s">emails at 50%, 80%, 100%</text>
+    <text x="812" y="755" class="xs">Standby Function Apps: stopped</text>
+    <text x="812" y="771" class="xs">(decouple-ready fallback, $0)</text>
+
+    <!-- ---------- EXTERNAL SERVICES (right) ---------- -->
+    <text x="1100" y="40" class="h">Connected services (outside Azure)</text>
+
+    <rect x="1100" y="62" width="380" height="96" rx="12" fill="#f3ecf9" stroke="#6a3f8f" stroke-width="1.5"/>
+    <text x="1116" y="88" class="t">Zoho Mail · SMTP</text>
+    <text x="1116" y="108" class="s">Sends invoice emails to Buyers (PDF + photos),</text>
+    <text x="1116" y="125" class="s">password links, alerts. App-specific password</text>
+    <text x="1116" y="142" class="xs">Microsoft 365 (Graph) ready as alternative sender</text>
+
+    <rect x="1100" y="172" width="380" height="112" rx="12" fill="#f3ecf9" stroke="#6a3f8f" stroke-width="1.5"/>
+    <text x="1116" y="198" class="t">Google Drive · archive (OAuth, drive.file)</text>
+    <text x="1116" y="218" class="s">Invoice / Buyer / Year / PDF of latest status</text>
+    <text x="1116" y="235" class="s">PO's / Buyer / Year / uploaded PO file</text>
+    <text x="1116" y="252" class="s">App sees only files it created; token encrypted</text>
+    <text x="1116" y="272" class="xs">Google Cloud project ShriyaMining-Cloud · $0</text>
+
+    <rect x="1100" y="298" width="380" height="92" rx="12" fill="#f3ecf9" stroke="#6a3f8f" stroke-width="1.5"/>
+    <text x="1116" y="324" class="t">Google service account “photo-reader”</text>
+    <text x="1116" y="344" class="s">Read-only on the shared photo folders</text>
+    <text x="1116" y="361" class="s">→ “Add photos ▾” picker when emailing</text>
+    <text x="1116" y="379" class="xs">InvoiceProductImages / …Test</text>
+
+    <rect x="1100" y="404" width="380" height="80" rx="12" fill="#f3ecf9" stroke="#6a3f8f" stroke-width="1.5"/>
+    <text x="1116" y="430" class="t">Have I Been Pwned (password check)</text>
+    <text x="1116" y="450" class="s">New passwords checked against breaches;</text>
+    <text x="1116" y="467" class="xs">only 5 hash characters leave the API · free</text>
+
+    <rect x="1100" y="498" width="380" height="80" rx="12" fill="#f3ecf9" stroke="#6a3f8f" stroke-width="1.5"/>
+    <text x="1116" y="524" class="t">Microsoft sign-in (Static Web Apps built-in)</text>
+    <text x="1116" y="544" class="s">Old sign-in, kept during the changeover;</text>
+    <text x="1116" y="561" class="xs">main sign-in is the app's own (password)</text>
+
+    <rect x="1100" y="592" width="380" height="80" rx="12" fill="#f3ecf9" stroke="#6a3f8f" stroke-width="1.5"/>
+    <text x="1116" y="618" class="t">Domain registrar · DNS</text>
+    <text x="1116" y="638" class="s">app.shriyamining.com → CNAME → Static Web App</text>
+    <text x="1116" y="655" class="xs">free managed HTTPS certificate from Azure</text>
+
+    <rect x="1100" y="686" width="380" height="110" rx="12" fill="#f3ecf9" stroke="#6a3f8f" stroke-width="1.5"/>
+    <text x="1116" y="712" class="t">Everything in the browser (no server cost)</text>
+    <text x="1116" y="732" class="s">PDF (invoice, loading plan) · Excel read/write</text>
+    <text x="1116" y="749" class="s">(exceljs) · photo resize + iPhone HEIC</text>
+    <text x="1116" y="766" class="s">Installable app on phones, tablets, computers</text>
+    <text x="1116" y="784" class="xs">no app-store fees</text>
+
+    <!-- ---------- GITHUB (bottom) ---------- -->
+    <rect x="270" y="830" width="1210" height="150" rx="16" fill="#eef0f2" stroke="#24292f" stroke-width="2"/>
+    <text x="290" y="856" class="h">GitHub · organisation shriyaminingindustriesgroup</text>
+    <g>
+      <rect x="290" y="870" width="210" height="96" rx="8" fill="#fff" stroke="#24292f"/>
+      <text x="302" y="892" class="t">3 repositories</text>
+      <text x="302" y="911" class="s">API (private, C#)</text>
+      <text x="302" y="928" class="s">UI (private, Vue)</text>
+      <text x="302" y="945" class="s">Docs (public, this reference)</text>
+      <rect x="515" y="870" width="560" height="96" rx="8" fill="#fff" stroke="#24292f"/>
+      <text x="527" y="892" class="t">GitHub Actions pipeline (push to test, then main)</text>
+      <text x="527" y="912" class="s">① build + tests (real SQL in a container)  ② DB migrations to that environment's</text>
+      <text x="527" y="929" class="s">database  ③ API release → UI workflow  ④ deploy screens + API to the Static Web App</text>
+      <text x="527" y="946" class="s">⑤ smoke test of the live site. Azure login by OIDC — no stored Azure password.</text>
+      <rect x="1090" y="870" width="375" height="96" rx="8" fill="#fff" stroke="#24292f"/>
+      <text x="1102" y="892" class="t">Scheduled / on-demand jobs</text>
+      <text x="1102" y="912" class="s">Uptime check every hour (prod + test,</text>
+      <text x="1102" y="929" class="s">/api/ping — doesn't wake the database)</text>
+      <text x="1102" y="946" class="s">Test-data refresh: prod → test (on demand)</text>
+    </g>
+
+    <!-- ---------- ARROWS ---------- -->
+    <!-- staff -> prod UI -->
+    <path d="M235,185 L316,212" stroke="#5c5248" stroke-width="2" fill="none" marker-end="url(#a)"/>
+    <text x="238" y="176" class="lbl">HTTPS</text>
+    <!-- buyers -> prod (review page) -->
+    <path d="M235,350 C270,350 280,300 316,262" stroke="#5c5248" stroke-width="2" fill="none" marker-end="url(#a)" stroke-dasharray="6 4"/>
+    <text x="240" y="300" class="lbl">review link</text>
+
+    <!-- API -> DB (prod, test) -->
+    <path d="M480,466 L480,546" stroke="#1f5f99" stroke-width="2.2" fill="none" marker-end="url(#ab)"/>
+    <text x="488" y="502" class="lbl">SQL (stored procedures)</text>
+    <path d="M850,466 L850,546" stroke="#1f5f99" stroke-width="2.2" fill="none" marker-end="url(#ab)"/>
+    <!-- API -> app insights -->
+    <path d="M316,440 L296,452 L296,740 L304,740" stroke="#1f5f99" stroke-width="1.5" fill="none" marker-end="url(#ab)" stroke-dasharray="5 4"/>
+    <text x="300" y="700" class="lbl" transform="rotate(-90 300 700)">telemetry</text>
+
+    <!-- SWA (both envs) -> externals -->
+    <path d="M1028,330 C1060,330 1060,110 1100,110" stroke="#6a3f8f" stroke-width="2" fill="none" marker-end="url(#ap)"/>
+    <path d="M1028,345 C1066,345 1066,228 1100,228" stroke="#6a3f8f" stroke-width="2" fill="none" marker-end="url(#ap)"/>
+    <path d="M1028,360 L1100,344" stroke="#6a3f8f" stroke-width="2" fill="none" marker-end="url(#ap)"/>
+    <path d="M1028,375 C1066,375 1066,444 1100,444" stroke="#6a3f8f" stroke-width="2" fill="none" marker-end="url(#ap)"/>
+    <path d="M1028,390 C1062,390 1062,538 1100,538" stroke="#6a3f8f" stroke-width="1.6" fill="none" marker-end="url(#ap)" stroke-dasharray="6 4"/>
+    <path d="M1100,632 C1070,632 1062,490 1044,480" stroke="#6a3f8f" stroke-width="1.6" fill="none" marker-end="url(#ap)" stroke-dasharray="2 4"/>
+
+    <!-- github -> azure -->
+    <path d="M800,870 L800,800" stroke="#24292f" stroke-width="2.2" fill="none" marker-end="url(#ag)"/>
+    <text x="808" y="822" class="lbl">deploy (OIDC) · migrations</text>
+    <path d="M235,900 L290,905" stroke="#24292f" stroke-width="2" fill="none" marker-end="url(#ag)"/>
+    <text x="238" y="890" class="lbl">git push</text>
+  </svg>
+
+  <div class="legend">
+    <span><i class="sw" style="background:#eaf2fa;border-color:#1f5f99"></i>Azure (one resource group)</span>
+    <span><i class="sw" style="background:#eaf5ee;border-color:#2e7d4f"></i>Production</span>
+    <span><i class="sw" style="background:#fdf3e1;border-color:#8a5a00"></i>Test</span>
+    <span><i class="sw" style="background:#f3ecf9;border-color:#6a3f8f"></i>Outside services</span>
+    <span><i class="sw" style="background:#eef0f2;border-color:#24292f"></i>GitHub (code + delivery)</span>
+    <span>Purple arrows on the right leave <b>both</b> environments, each with its own settings and folders · dashed = occasional / legacy</span>
+  </div>
+</section>
+
+<!-- ============================ PAGE 2: WHAT EACH CONNECTION IS ============================ -->
+<section class="page">
+  <header>
+    <h1>What it is connected to, and why</h1>
+    <span class="sub">Each integration: purpose, how the app proves who it is, where its secret lives, and what it costs</span>
+  </header>
+
+  <table>
+    <thead><tr><th>Connection</th><th>What it's for</th><th>How the app connects</th><th>Secret kept in</th><th>Cost</th></tr></thead>
+    <tbody>
+      <tr><td>Static Web App (Azure)</td><td>Hosts the screens and the API for production and test; HTTPS; custom domain</td><td>GitHub Actions deploys with a deployment token; users reach it over HTTPS</td><td>GitHub secret</td><td>$0 (Free tier)</td></tr>
+      <tr><td>Azure SQL (2 databases)</td><td>All business data, users, sessions, logs, archive queue</td><td>API → SQL with a limited database user (stored procedures only)</td><td>SWA settings</td><td>Free offer; prod pays as you go only above it</td></tr>
+      <tr><td>Application Insights + alerts</td><td>See errors and traffic; email when something breaks; budget warnings</td><td>API sends telemetry; 6 metric alerts → action group email</td><td>SWA settings (connection string)</td><td>$0 within free limits</td></tr>
+      <tr><td>Zoho Mail (SMTP)</td><td>Invoice emails to buyers, password links, alert emails</td><td>SMTP login per sending service (MailKit)</td><td>SWA settings (app-specific password)</td><td>Existing Zoho plan</td></tr>
+      <tr><td>Google Drive (archive)</td><td>Copy of each invoice's latest status PDF; every uploaded PO file</td><td>OAuth 2.0, scope <code>drive.file</code>, one-time Admin <i>Connect</i>; refresh token stored AES-GCM encrypted</td><td>SWA settings: client ID/secret, encryption key</td><td>$0 (15 GB free Google storage)</td></tr>
+      <tr><td>Google service account</td><td>Pick photos from Drive folders when emailing</td><td>Signed JWT, read-only; folders shared with it as Viewer</td><td>SWA setting (key, Base64)</td><td>$0</td></tr>
+      <tr><td>Have I Been Pwned</td><td>Refuse breached passwords</td><td>k-anonymity range call (5 hash characters)</td><td>none</td><td>$0</td></tr>
+      <tr><td>Microsoft sign-in</td><td>Old sign-in, kept during the changeover to the app's own</td><td>Static Web Apps built-in auth; switch <code>AUTH_ALLOW_PLATFORM_SIGN_IN</code></td><td>Azure-managed</td><td>$0</td></tr>
+      <tr><td>Domain registrar (DNS)</td><td>app.shriyamining.com</td><td>CNAME to the Static Web App; Azure issues the HTTPS certificate</td><td>registrar account</td><td>domain fee only</td></tr>
+      <tr><td>GitHub</td><td>Code, reviews, pipelines, uptime check, test-data refresh</td><td>Actions log in to Azure by OIDC (no stored password); API releases read by a PAT</td><td>GitHub secrets</td><td>$0 (free minutes)</td></tr>
+    </tbody>
+  </table>
+
+  <div class="cols">
+    <div class="flows">
+      <h2>Four journeys through the system</h2>
+      <ol>
+        <li><b>Sign-in:</b> staff open app.shriyamining.com → email + password checked by the API (PBKDF2 + secret pepper) → session cookie (HttpOnly, 60 min idle, 12 h max) → every API call checks role and permission.</li>
+        <li><b>Invoice to buyer:</b> staff build the invoice from POs → the browser makes the PDF → API saves it and emails the buyer through Zoho with a private review link → buyer opens <code>/review</code>, approves or rejects → status and history update; the staff see it at once.</li>
+        <li><b>Archive to Drive:</b> any status change writes a "save" task in the same database step → the browser sends the PDF → API uploads it to <code>Invoice/Buyer/Year</code> and moves the previous status's file to the bin. Uploaded POs go to <code>PO's/Buyer/Year</code>. Failures are listed with Retry and raise an alert.</li>
+        <li><b>A change reaching users:</b> developer pushes to <code>test</code> → pipeline tests, migrates the test database, deploys, smoke-tests → checked on the test site → the same commit is pushed to <code>main</code> → production. Rollback = redeploy the previous release.</li>
+      </ol>
+    </div>
+    <div class="flows">
+      <h2>Design choices worth knowing</h2>
+      <ol>
+        <li><b>$0-first:</b> Free tiers everywhere; the only paid item is production database time beyond the free offer, capped by a $20 budget alert.</li>
+        <li><b>One app, not many services:</b> the API is a modular monolith (6 modules) inside the Static Web App — simple and free. Standby Function Apps exist (stopped) if it ever needs to be split out.</li>
+        <li><b>Test mirrors production</b> with its own database, settings, keys and Drive folders; production data is copied to test only on demand.</li>
+        <li><b>Secrets only in Azure settings</b> — never in code, never in the database, never in the public Docs repo.</li>
+        <li><b>Heavy work in the browser</b> (PDFs, Excel, photo resizing) keeps the server small and free.</li>
+      </ol>
+    </div>
+  </div>
+
+  <p class="note">Source of truth: ShriyaMiningIndustries_Docs / ARCHITECTURE.md (§3–§6 platform and pipelines, §8 sign-in, §10 cost, §11 secrets and archive) ·
+  setup guides: documents/Google-Drive-Setup.md, documents/Installable-App-PWA.md. Prepared 23 Nov 2026. Print: A4 landscape, 2 pages.</p>
+</section>
+
+</body>
+</html>

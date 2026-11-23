@@ -65,6 +65,11 @@ C:\Users\<user>\OneDrive\GIT\Shriyamining\ShriyaMiningIndustries_Docs\  (this re
 
 ## 3. High-level architecture
 
+**The whole system as one picture** (both environments, the database, monitoring, every outside service, GitHub), with a
+table of each connection, its secret and its cost: [documents/App-Architecture.html](documents/App-Architecture.html)
+([published page](https://shriyaminingindustriesgroup.github.io/ShriyaMiningIndustries_Docs/documents/App-Architecture.html)). **Keep it current:** any change that
+adds, removes or changes a component or an outside connection updates that page in the same session (§7.8).
+
 ```mermaid
 flowchart LR
     Browser(["Browser"])
@@ -110,7 +115,7 @@ decoupling steps.
 | | Production | Test |
 |---|---|---|
 | Trigger branch | `main` | `test` |
-| UI URL | the company's own domain, app at its root (19 Nov 2026; host kept out of these public docs); also `https://gray-meadow-0ebc61d10.6.azurestaticapps.net` | `https://gray-meadow-0ebc61d10-test.centralus.6.azurestaticapps.net` (a custom domain needs its own Static Web App: preview environments can't have one) |
+| UI URL | `https://app.shriyamining.com` (the company's own domain, app at its root, 19 Nov 2026; named in these docs since 23 Nov 2026, owner's decision: it's the public website); also `https://gray-meadow-0ebc61d10.6.azurestaticapps.net` | `https://gray-meadow-0ebc61d10-test.centralus.6.azurestaticapps.net` (a custom domain needs its own Static Web App: preview environments can't have one) |
 | SWA environment name | `default` | `test` |
 | Database | `shriyaminingdb` | `shriyaminingdbtest` |
 | Standalone Function App | `ShriyaMiningIndustries-api` | `ShriyaMiningIndustries-api-test` |
@@ -998,7 +1003,8 @@ the build and tests; the rest is reviewed. Each rule exists because of a real pr
   together, release the side that accepts both shapes first.
 - [ ] Cost: $0 unless agreed; prices from the Azure Retail Prices API before adding anything; no keep-alive
   calls to the database.
-- [ ] Docs in the same session: this file (and its §7.8 if a new rule is learned) and `index.html`.
+- [ ] Docs in the same session: this file (and its §7.8 if a new rule is learned) and `index.html`. A new or changed
+  component or outside connection also updates the picture and table in `documents/App-Architecture.html`.
 
 ---
 
