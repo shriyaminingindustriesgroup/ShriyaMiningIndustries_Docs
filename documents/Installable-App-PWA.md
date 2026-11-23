@@ -253,14 +253,16 @@ give anyone access.
 
 **Shriya Mining Industries app – iPhone / iPad install guide**
 
-1. Open **Safari** on your iPhone or iPad and go to https://app.shriyamining.com
-   (If you tapped the link in WhatsApp, tap ⋯ or the compass icon and choose **Open in Safari**.)
-2. Tap the **Share** button (the square with an arrow pointing up): at the bottom of the screen on iPhone, at the top
-   on iPad.
+1. Open **Safari** on your iPhone or iPad (must use Safari) and go to https://app.shriyamining.com
+2. Tap the **Share** button (the square with an upward arrow).
 3. Scroll down and tap **Add to Home Screen**.
 4. Tap **Add** in the top-right corner.
 5. Go to your Home Screen and open the **Shriya Mining** app icon.
 6. You'll now see the app in full-screen mode without the Safari address bar.
+
+*Tips (not part of the message):*
+- If the link was opened inside WhatsApp, tap ⋯ or the compass icon and choose **Open in Safari** first.
+- The Share button is at the bottom of the screen on iPhone and at the top on iPad.
 
 **Shriya Mining Industries app – computer install guide (Chrome or Edge)**
 
