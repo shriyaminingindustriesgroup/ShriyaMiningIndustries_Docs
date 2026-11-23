@@ -240,6 +240,38 @@ by WhatsApp or email, with these steps:
 Each person still needs their own sign-in. An Admin invites them (ARCHITECTURE.md §8); installing the app doesn't
 give anyone access.
 
+### Install guides to send (copy and paste into WhatsApp or email)
+
+**Shriya Mining Industries app – Android install guide**
+
+1. Open **Chrome** on your Android phone and go to https://app.shriyamining.com
+2. Tap the three dots (⋮) in the top-right corner of Chrome.
+3. Tap **Install app** (or **Add to Home screen**).
+4. Tap **Install** (or **Add**) on the confirmation pop-up.
+5. Go to your Home Screen or App Drawer and open the **Shriya Mining** app icon.
+6. You'll now see the app in full-screen mode without the browser address bar.
+
+**Shriya Mining Industries app – iPhone / iPad install guide**
+
+1. Open **Safari** on your iPhone or iPad and go to https://app.shriyamining.com
+   (If you tapped the link in WhatsApp, tap ⋯ or the compass icon and choose **Open in Safari**.)
+2. Tap the **Share** button (the square with an arrow pointing up): at the bottom of the screen on iPhone, at the top
+   on iPad.
+3. Scroll down and tap **Add to Home Screen**.
+4. Tap **Add** in the top-right corner.
+5. Go to your Home Screen and open the **Shriya Mining** app icon.
+6. You'll now see the app in full-screen mode without the Safari address bar.
+
+**Shriya Mining Industries app – computer install guide (Chrome or Edge)**
+
+1. Open **Chrome** or **Edge** and go to https://app.shriyamining.com
+2. Click the install icon at the right end of the address bar (a screen with a down arrow), or open the browser menu
+   and choose **Install Shriya Mining** (Edge: *Apps → Install this site as an app*).
+3. Click **Install** on the confirmation pop-up.
+4. The app opens in its own window. Find it later in the Start menu (Windows) or Applications (Mac) as **Shriya Mining**.
+
+After installing, sign in as usual. Updates arrive by themselves: there's nothing to update or reinstall.
+
 ### Optional: an Android `.apk` file to send on WhatsApp
 
 Only if someone needs a file to tap rather than a link:
