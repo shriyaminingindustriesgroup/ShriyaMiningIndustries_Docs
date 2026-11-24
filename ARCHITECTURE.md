@@ -173,7 +173,7 @@ one Azure subscription.
 | Admin → Health (Phase 2) | `/admin/health`; `GET console/health`, `console/sign-ins`, `console/emails` | — | Tiles for 24 hours / 7 days / 30 days with a target each (green or amber): server errors (none, or under 1% of logged requests), nobody locked out, account and invoice emails at least 99% sent; errors by code (links to Error logs); every sign-in attempt and every email with the mail server's answer, filterable and exported to Excel. Read from the app's own logs (`R__platform-65-health.sql`): no Azure cost. Admin role + `errorlog.view`. |
 | Smoke test after every deploy (Phase 3) | UI repo `scripts/smoke-test.sh`, last step of the deploy workflow | — | Waits until the live site answers with the new API build, then checks the pages load, sign-out's cookie gets through the Static Web App (`max-age=0`), the CSRF check refuses a request without the app's header, and admin data refuses a stranger. No sign-in, no database, nothing changed. A failure turns the deploy red (GitHub emails it). Would have caught both cookie bugs of 18 Nov 2026. |
 | Uptime check (Phase 3) | Docs repo `.github/workflows/uptime.yml`, hourly at :17 | — | Production and test: `/api/ping` (no database: never wakes or bills it) and the sign-in page, one retry after 30 s. In the public Docs repo because Actions minutes are free there. A red run is emailed to whoever last changed the schedule. |
-| Build stamp | `/api/ping`, `/api/health`, Admin → Health, hovering the app's footer | — | Each API build carries its commit (`-p:SourceRevisionId`) and works out its environment from the database name; the UI build carries its own (`GITHUB_SHA`). `/api/ping` reports both without touching the database. Since 23 Nov 2026 the footer shows the copyright (© year Shriya Mining Industries); the commits appear when you hover it. |
+| Build stamp | `/api/ping`, `/api/health`, hovering the app's footer (not shown on Admin → Health since 24 Nov 2026) | — | Each API build carries its commit (`-p:SourceRevisionId`) and works out its environment from the database name; the UI build carries its own (`GITHUB_SHA`). `/api/ping` reports both without touching the database. Since 23 Nov 2026 the footer shows the copyright (© year Shriya Mining Industries); the commits appear when you hover it. |
 | Test-data refresh (19 Nov 2026) | API repo `.github/workflows/refresh-test-data.yml`, tool `src/ShriyaMiningIndustries.DataRefresh` | — | Copies production's business data into the test database on a schedule or on demand (§6.3). Signs in with its **own** Entra identity (GitHub OIDC, protected environment `test-refresh`, `main` only): read-only in production, writes only the business tables in test, and a custom role that can only add and remove firewall rules on this SQL server. Runs recorded in `ops.DataRefreshRun` (test). |
 | Budget | `ShriyaMining-Monthly` | $20 / month, subscription | Emails at 50% and 80% of actual cost and at 100% forecast. Added when the production database moved to pay as you go (2026-11-17). Free. |
 
@@ -1249,11 +1249,35 @@ So Back, refresh and a shared link show the same list.
 
 **Feedback**
 - A figure with a target shows "Target: … · now …".
-- A disabled button says why (Wave 6). Pages never crash on a missing field: guard optional API fields.
+- **A disabled button says why** (`DisabledReason` beside it, `aria-describedby` on the button). Form submit buttons
+  such as Sign in are never disabled: check on submit and say what's missing.
+- Pages never crash on a missing field: guard optional API fields.
+- A page on its way says **"Loading…" within 300 ms** (MainLayout, on every route change).
+- A list cut at a limit says so and offers more (Purchase Orders: "Load more" up to 5,000; `?limit=` on
+  `GET /api/po-ledger/po-list`).
+
+**Shared controls (Wave 6, 24 Nov 2026)**
+- Row and page actions use **`MoreMenu`** (WAI-ARIA menu button: ↑/↓/Home/End, Esc returns the focus, one open at a
+  time, placed against the screen so a scrolling table never clips it). No `<details>` menus.
+- **One icon per menu item** (`icons.ts`: Health `gauge`, Tracking `route`, Roles `shield`, Company profile
+  `factory`, Payload logs `code`).
+- Page title = browser tab title.
+- Downloads are always "Download Excel" / "Download CSV".
+
+**Delivered invoices are read only (owner, D6, 24 Nov 2026):**
+- Nobody can change the lines or document, Admin and Manager included (`usp_Invoice_Update` refuses with 409;
+  `fieldsEditable` in the UI).
+- Shipping details still change.
+- An Admin moves the invoice back to Draft (with a reason) to correct it.
+- The page says "Delivered: read only…" and asks for nothing.
 
 **Touch:** targets of at least 44 × 44 px on phones and tablets (Wave 5). Accessibility baseline: WCAG 2.2 AA.
 
-**Checked by** `npm run check:devices`. Besides the §7.9 checks, a screen fails for:
+**Checked by** `npm run check:devices` (all of plan/ui-usability-review/06-Standards.md §S8 since Wave 6). Besides the
+§7.9 checks, a screen fails for:
+- not exactly one `h1`;
+- something with a pointer cursor that the keyboard can't reach (a clickable row is fine if it holds a real control);
+- on phones, a target under 44 px, or cards that scroll sideways;
 - a console error or uncaught exception;
 - a visible control with no name (closed `<details>` menus skipped);
 - a pop-up that doesn't open as a modal `<dialog>`, take the focus, fit the screen, close on Esc and give the focus
