@@ -1019,7 +1019,8 @@ the build and tests; the rest is reviewed. Each rule exists because of a real pr
   a new error gets a code and a `log.ErrorCode` row with its user and technical messages (the build fails without it).
 - [ ] Navigation and state (§7.12): numbers open their list; names open their thing (a PO number opens the PO page);
   a linked page reads its filters from the address with a tested parser; every route highlights a tab; pop-ups are
-  `AppDialog`, confirmations `confirmDialog`, edit screens `useUnsavedGuard`.
+  `AppDialog`, confirmations `confirmDialog`, edit screens `useUnsavedGuard`; a list keeps its state in the address
+  (`useListState`).
 - [ ] Docs in the same session: this file (and its §7.8 if a new rule is learned) and `index.html`. A new or changed
   component or outside connection also updates the picture and table in `documents/App-Architecture.html`.
 
@@ -1200,8 +1201,20 @@ follows these rules, next to §7.9 (devices) and §7.11 (error messages).
 - defaults are left out;
 - bad values are dropped, never an error;
 - typing uses `router.replace`, and opening an item uses `router.push`.
-So Back, refresh and a shared link show the same list. (Health, Error logs and Payload logs since Wave 1; the main
-lists follow in Wave 3.)
+So Back, refresh and a shared link show the same list.
+- **Health, Error logs and Payload logs** (Wave 1) use a parser and a link builder in `services/log-links.ts`.
+- **Invoices, Purchase Orders, Tracking and Users** (Wave 3) bind their own refs with
+  `useListState({ key: bind.text(ref) | bind.int | bind.oneOf | bind.bool | bind.date | bind.flags | bind.json | bind.custom }, { onExternalChange })`
+  (`composables/useListState.ts`):
+  - the values are read from the address before the first load and written back on every change;
+  - they are read again on Back/Forward;
+  - keys the page doesn't own are kept.
+  Column filters travel as `?f=` (JSON, checked by `columnFiltersFrom`); Invoices' Status as `?status=a,b` (the form
+  Insights sends).
+- **Breadcrumbs, Cancel and "Back to …"** go back in history when the target is the page just left (`services/back.ts`),
+  so that list keeps its state. The router restores the scroll position once the list is tall enough.
+- A filter read from the address must not send the list back to page 1: guard the page's own "filter changed → page
+  1" watchers while restoring (see InvoiceList and PoTracking).
 
 **Dialogs and unsaved work (Wave 2, 23 Nov 2026)**
 - **Every pop-up is an `AppDialog`** (`components/ui/AppDialog.vue`), on the native `<dialog>` with `showModal()`:
