@@ -1444,8 +1444,8 @@ During the changeover two sign-ins work side by side; the setting `AUTH_ALLOW_PL
    `app.InvoiceStatusChange` (who, when, from/to, remarks). Tracking hides Fulfilled POs unless
    "Show fulfilled POs" is ticked.
 
-   **Pages:** **Create Invoice** (`/create-invoice`, the home page for anyone with `file.upload`) picks lines from saved POs, then review & save; editing a PO invoice opens it too. **PO Import** (`/po-import`) only uploads and saves POs, then offers Create invoice. **Home page:** Create Invoice for anyone with `file.upload` (Admin, Manager, User); Invoices for
-   everyone else. Admin pages also check the role by address, not just in the menu.
+   **Pages:** **Create Invoice** (`/create-invoice`, the home page for anyone with `file.upload`) picks lines from saved POs, then review & save; editing a PO invoice opens it too. **PO Import** (`/po-import`) only uploads and saves POs, then offers Create invoice. **Home page** (`/`, so the first page after sign-in and the logo's link; `homePath` in `navigation.ts`): **Insights** for anyone
+   with `insights.view` (Admin, Manager; owner, 24 Nov 2026); Invoices for everyone else. Admin pages also check the role by address, not just in the menu.
 
 ---
 
