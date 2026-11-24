@@ -1047,7 +1047,17 @@ before it is released. This is part of "done", like the tests: a change that onl
   editor's Save button covered the invoice title on an iPhone).
 - Everything can be reached and tapped: the menu, every action, every pop-up's buttons.
 - Wide tables keep readable columns and **scroll sideways inside their own box**; they are never squeezed into
-  slivers and never widen the page.
+  slivers and never widen the page. **Exception (Wave 5, 24 Nov 2026):** the three main lists (Invoices, Purchase Orders,
+  Tracking by PO) become **one card per row below 600 px** (`table.list-cards` in `ui.css`):
+  - mark the cells `card-title`, `card-amount`, `card-actions`, `card-status`, `card-key` and `card-full`;
+  - give the other cells `data-label="…"`, and they show as "Label: value";
+  - the column filters move to a `.card-filters` row above the cards.
+- **Touch targets are at least 44 × 44 px** on phones and tablets (`ui.css`, "Touch targets"):
+  - buttons and boxes grow;
+  - small links and icon buttons get an invisible 44 px tap area (`::after`; add a new small control's class to that list);
+  - boxes inside the dense line editors and tick boxes keep the WCAG minimum of 24 px.
+  `npm run check:devices` fails a phone screen with a smaller target, or with cards that scroll sideways.
+- **Phone headers** keep one main action; the rest go in a `MoreMenu` (`.desk-only` / `.phone-only`).
 
 **The rules that make it so** (follow them; the shared styles already do most of it)
 - **Navigation, B+ (owner, 23 Nov 2026; plan/navigation-redesign; `MainLayout.vue`):** the same on every device.
