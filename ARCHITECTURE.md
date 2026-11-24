@@ -1183,7 +1183,9 @@ follows these rules, next to §7.9 (devices) and §7.11 (error messages).
   `to`, a plain card otherwise.
 - **Every name opens the thing it names:**
   - an invoice number opens the invoice;
-  - **a PO number opens the PO page** (`poPageLink`, `services/po-link.ts`; Tracking is the view across POs);
+  - **a PO number opens the PO page** (`poPageLink` / `poLinkFor`, `services/po-link.ts`; Tracking is the view across
+    POs and keeps its own "Track PO" buttons). The PO page (`/purchase-orders/edit`, titled "PO 172925") links each
+    line's invoices (`InvoicesJson` from `usp_PurchaseOrder_GetForEdit`);
   - a buyer opens Invoices filtered to that buyer.
 - **A link sends only what the target reads.** A linked page has a parser and a link builder, with a round-trip
   test. They are:
@@ -1192,6 +1194,10 @@ follows these rules, next to §7.9 (devices) and §7.11 (error messages).
   - `parsePayloadLogQuery` / `payloadLogLink`;
   - `parseHealthQuery` / `healthLink` (`services/log-links.ts`).
   Never hand-write a query string for another page.
+- **Admin pages say where they are:** the All tab reads "All · Health" (just All on phones), and `PageHeader` adds the
+  breadcrumb "Admin › Health" on every `/admin/*` page; "Admin" opens the All menu (`open-all-menu` event).
+- **Tabs inside a page** use `AppTabs` (WAI-ARIA tabs, `?tab=` in the address); keep every tab mounted (`v-show`) so
+  switching keeps typed input. Company profile: Company · Email · Cloud storage.
 - **A tab is always highlighted:** `activeSection()` covers every route (`router/active-section.test.js` reads the router
   and fails for a new page without a section). Only account, sign-in and public pages have none.
 - **A menu lists only distinct destinations.** Two items that open the same page are one item.
