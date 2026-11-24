@@ -1016,7 +1016,9 @@ the build and tests; the rest is reviewed. Each rule exists because of a real pr
 - [ ] Cost: $0 unless agreed; prices from the Azure Retail Prices API before adding anything; no keep-alive
   calls to the database.
 - [ ] Errors (§7.11): people see a plain message, never technical text (screens show `error.message` or `messageOf()`);
-  a new error gets a code and a `log.ErrorCode` row with its user and technical messages.
+  a new error gets a code and a `log.ErrorCode` row with its user and technical messages (the build fails without it).
+- [ ] Navigation and state (§7.12): numbers open their list; names open their thing (a PO number opens the PO page);
+  a linked page reads its filters from the address with a tested parser; every route highlights a tab.
 - [ ] Docs in the same session: this file (and its §7.8 if a new rule is learned) and `index.html`. A new or changed
   component or outside connection also updates the picture and table in `documents/App-Architecture.html`.
 
@@ -1153,8 +1155,69 @@ correlation ID finds the request in Application Insights and in Payload logs.
 
 **Adding a new error:**
 - Give it a stable code and a catalogue row in `log.ErrorCode` (a `V###` migration) with a message written for people.
+  `ErrorCodeRegistryTests` (API) **fails the build** when a code in `src/` has no migration row (23 Nov 2026).
 - Throw it as the app's exception, never as raw text.
 - A new browser-side code also goes in `ClientErrorService.Codes` and `ClientErrorCode`.
+- A code that still reaches the log unregistered is saved as `LOG-CODE-UNREGISTERED`, with the real code at the start
+  of the details (ErrorLogWriter), never without a code. Health's "No code" row is only for rows written before V060.
+
+**Health and the logs link to each other (23 Nov 2026, UX-01/02/10):**
+- Each Health tile opens its list for the same period (`services/log-links.ts`):
+  - Server errors → Payload logs, failures with status 5xx;
+  - Sign-ins → the Sign-ins tab;
+  - the email tiles → the Emails tab, filtered.
+- Each "Logged errors by code" row opens Error logs with `?code=` (or `?noCode=1`) and `?period=`.
+- Error logs, Payload logs and Health keep every filter in the address. The API's `GET /api/console/error-log` takes
+  `noCode=1`, and `GET /api/console/payload-log` takes `status=4xx|5xx|<code>` with `from`/`to`.
+
+### 7.12 Navigation, state and interaction (the UI standard, 23 Nov 2026)
+
+From the UI usability review (plan/ui-usability-review: 42 issues, fixed in six waves). Every screen, new or changed,
+follows these rules, next to §7.9 (devices) and §7.11 (error messages).
+
+**Links and navigation**
+- **Every number opens the list that makes it up**, with the same filters (period, status, buyer). A figure that
+  can't be opened isn't styled like one that can. Use `StatTile` (`components/ui/StatTile.vue`): a link when given
+  `to`, a plain card otherwise.
+- **Every name opens the thing it names:**
+  - an invoice number opens the invoice;
+  - **a PO number opens the PO page** (`poPageLink`, `services/po-link.ts`; Tracking is the view across POs);
+  - a buyer opens Invoices filtered to that buyer.
+- **A link sends only what the target reads.** A linked page has a parser and a link builder, with a round-trip
+  test. They are:
+  - `linkFilters` / `invoicesLink` (Invoices);
+  - `parseErrorLogQuery` / `errorLogLink`;
+  - `parsePayloadLogQuery` / `payloadLogLink`;
+  - `parseHealthQuery` / `healthLink` (`services/log-links.ts`).
+  Never hand-write a query string for another page.
+- **A tab is always highlighted:** `activeSection()` covers every route (`router/active-section.test.js` reads the router
+  and fails for a new page without a section). Only account, sign-in and public pages have none.
+- **A menu lists only distinct destinations.** Two items that open the same page are one item.
+- **Page title = browser tab title = the button or menu label** that opens it.
+
+**State.** Filters, search, sort, page and tab live **in the address**:
+- defaults are left out;
+- bad values are dropped, never an error;
+- typing uses `router.replace`, and opening an item uses `router.push`.
+So Back, refresh and a shared link show the same list. (Health, Error logs and Payload logs since Wave 1; the main
+lists follow in Wave 3.)
+
+**Dialogs and unsaved work:** coming in Wave 2:
+- one `AppDialog`: native `<dialog>`, focus kept inside, Esc closes it, focus returns to the opener;
+- an outside click never throws away typed input;
+- no `confirm()`;
+- one `useUnsavedGuard` on every edit screen.
+
+**Feedback**
+- A figure with a target shows "Target: … · now …".
+- A disabled button says why (Wave 6). Pages never crash on a missing field: guard optional API fields.
+
+**Touch:** targets of at least 44 × 44 px on phones and tablets (Wave 5). Accessibility baseline: WCAG 2.2 AA.
+
+**Checked by** `npm run check:devices`. Besides the §7.9 checks, a screen fails for:
+- a console error or uncaught exception;
+- a visible control with no name (closed `<details>` menus skipped).
+The full list of checks to come is in plan/ui-usability-review/06-Standards.md §S8.
 
 ## 8. Authentication & authorization
 
@@ -1619,6 +1682,25 @@ already gone): set cookies **before** the body; (2) the platform removes any `Se
 attribute: use `Max-Age` only (`Max-Age=0` to clear). Check from outside: `POST /api/auth/sign-out` with
 `X-Requested-With: smi` must return `set-cookie: smi_session=…; max-age=0` (the deploy smoke test does this).
 `SessionCookieOrderTests` guards both rules.
+
+**Health shows many errors as "(none)": logged without a code (found 23 Nov 2026, UX-02).**
+
+*Cause.*
+- The API's own codes were never added to `log.ErrorCode`: the AppException codes and the middleware's
+  `API-ERROR-500`, e.g. `API-INPUT-400`, `AUTH-LOGIN-401`, `AUTH-PERM-403`, `INV-CONFLICT-409`.
+- The foreign key on `log.ErrorLog.ErrorCode` refused them, so `ErrorLogWriter` retried and saved the row with
+  **no code**.
+- Production showed 42 in one day, mostly ordinary 4xx (validation, not signed in, not allowed).
+- Error logs couldn't list them, and Health's "(none)" link found nothing.
+
+*Fix:*
+- **V060** registers every code the API uses.
+- `ErrorLogWriter` now falls back to `LOG-CODE-UNREGISTERED` and keeps the real code in the details.
+- `ErrorCodeRegistryTests` fails the build for a code without a migration.
+- Rows written before the fix show as **"No code"** and open with `?noCode=1`.
+
+*If "No code" grows again after 23 Nov 2026:* something writes `log.usp_ErrorLog_Insert` with `@ErrorCode = NULL`
+directly. Find the path in the rows' `RequestPath`/`Layer` and give it a code.
 
 ### 12.1 Alert runbook (Operations plan, Phase 4, 18 Nov 2026)
 
