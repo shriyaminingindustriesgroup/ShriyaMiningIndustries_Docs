@@ -1018,7 +1018,8 @@ the build and tests; the rest is reviewed. Each rule exists because of a real pr
 - [ ] Errors (§7.11): people see a plain message, never technical text (screens show `error.message` or `messageOf()`);
   a new error gets a code and a `log.ErrorCode` row with its user and technical messages (the build fails without it).
 - [ ] Navigation and state (§7.12): numbers open their list; names open their thing (a PO number opens the PO page);
-  a linked page reads its filters from the address with a tested parser; every route highlights a tab.
+  a linked page reads its filters from the address with a tested parser; every route highlights a tab; pop-ups are
+  `AppDialog`, confirmations `confirmDialog`, edit screens `useUnsavedGuard`.
 - [ ] Docs in the same session: this file (and its §7.8 if a new rule is learned) and `index.html`. A new or changed
   component or outside connection also updates the picture and table in `documents/App-Architecture.html`.
 
@@ -1202,11 +1203,20 @@ follows these rules, next to §7.9 (devices) and §7.11 (error messages).
 So Back, refresh and a shared link show the same list. (Health, Error logs and Payload logs since Wave 1; the main
 lists follow in Wave 3.)
 
-**Dialogs and unsaved work:** coming in Wave 2:
-- one `AppDialog`: native `<dialog>`, focus kept inside, Esc closes it, focus returns to the opener;
-- an outside click never throws away typed input;
-- no `confirm()`;
-- one `useUnsavedGuard` on every edit screen.
+**Dialogs and unsaved work (Wave 2, 23 Nov 2026)**
+- **Every pop-up is an `AppDialog`** (`components/ui/AppDialog.vue`), on the native `<dialog>` with `showModal()`:
+  - the page behind is inert and Tab stays inside;
+  - focus moves in (an element with `data-autofocus`, else the first field, else the heading) and returns to the
+    button that opened it;
+  - Esc and a click outside close it;
+  - pass `:dirty` (typed input; `useDirtyForm` / `useDirtySinceLoaded`) and they ask **"Discard changes?"** first;
+    `:busy` stops closing while saving.
+  - Keep the box's own markup (`.modal.card`) as the dialog's child.
+- **No `alert()` / `confirm()`:** `await confirmDialog({ title, message, confirmLabel, tone })` (`services/confirm.ts`,
+  shown by `ConfirmHost` in `App.vue`). The button names the action ("Disconnect Google Drive", not "OK"); `danger`
+  puts the focus on Cancel.
+- **Every edit screen uses `useUnsavedGuard(isDirty, 'the …')`:** "Leave without saving?" for a tab, a link or Back,
+  and the browser's own warning on closing the tab. Call `allowLeave()` after a save that navigates away.
 
 **Feedback**
 - A figure with a target shows "Target: … · now …".
@@ -1216,7 +1226,9 @@ lists follow in Wave 3.)
 
 **Checked by** `npm run check:devices`. Besides the §7.9 checks, a screen fails for:
 - a console error or uncaught exception;
-- a visible control with no name (closed `<details>` menus skipped).
+- a visible control with no name (closed `<details>` menus skipped);
+- a pop-up that doesn't open as a modal `<dialog>`, take the focus, fit the screen, close on Esc and give the focus
+  back (the admin forms, at every width).
 The full list of checks to come is in plan/ui-usability-review/06-Standards.md §S8.
 
 ## 8. Authentication & authorization
