@@ -501,6 +501,9 @@ flowchart LR
     failed, sign-in locked, refused sign-ins burst. What to do for each: ARCHITECTURE.md §12.1.</li>
     <li><strong>Every deploy checks itself:</strong> <code>scripts/smoke-test.sh</code> (UI repo) runs against the live site
     (pages, the sign-in cookie, CSRF, admin protection, test-only endpoint closed in production).</li>
+    <li><strong>Browser tests before every test deploy</strong> (24 Nov 2026): Playwright signs in and works through the app at
+    computer and phone sizes, against a throwaway database, API and mail catcher built on the GitHub runner; a failure stops
+    the test deploy. Never touches Azure or a live site (ARCHITECTURE.md §6.2).</li>
     <li><strong>Uptime check</strong> every hour (Docs repo workflow): <code>/api/ping</code> and the sign-in page only, so the
     database is never woken.</li>
     <li><strong>Which build is live:</strong> <code>/api/ping</code> and the hover text of the app's footer (which shows © Shriya Mining Industries) give the commit and environment. (Admin → Health no longer prints it: owner, 24 Nov 2026.)</li>

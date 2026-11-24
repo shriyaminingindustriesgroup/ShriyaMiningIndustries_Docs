@@ -202,7 +202,7 @@ Triggers on push to `main` or `test`. Branch decides the environment end-to-end 
 flowchart LR
     Push["push to main or test"] --> Test["test job:\nrestore, build →\nthrowaway SQL Server, built from the scripts →\nall tests (incl. repository tests)"]
     Test --> Migrate["migrate job:\nopen SQL firewall for runner IP →\nDbUp: new V### scripts once,\nevery R__ script (procs, views) again (branch DB) →\nclose firewall"]
-    Migrate --> Deploy["deploy job:\npublish API →\nzip + GitHub Release (api-<sha> or api-test-<sha>) →\nrepository_dispatch to UI repo\n(the UI repo deploys it with the Static Web App)"]
+    Migrate --> Deploy["deploy job:\npublish API →\nzip + GitHub Release (api-<sha> or api-test-<sha>;\napi-release.zip + e2e-kit.zip) →\nrepository_dispatch to UI repo\n(the UI repo deploys it with the Static Web App)"]
 ```
 
 Key points worth knowing when debugging this pipeline:
@@ -229,6 +229,10 @@ Key points worth knowing when debugging this pipeline:
   specifically so the UI repo's pipeline can pick the *right* release for the environment it's
   deploying — GitHub's own "latest release" is just whichever was published most recently across
   *both* prefixes, which is not necessarily correct for a given run.
+- **Each release carries two files** (24 Nov 2026, quality plan Q-04): `api-release.zip` (the Functions app, the only
+  thing the UI deploys) and `e2e-kit.zip` (this commit's migrator, `database/migrations`, the browser-test seed tool
+  `tests/ShriyaMiningIndustries.E2eSeed` and the sample PO PDFs), used only by the UI repo's browser tests (§6.2). The
+  seed refuses any database whose name doesn't start with `SmiE2e`; nothing in the kit is ever deployed.
 - **OIDC login needs a federated credential matching the exact branch.** The Azure AD App
   Registration has two: `github-main-branch` (subject ends `ref:refs/heads/main`) and
   `github-test-branch` (`ref:refs/heads/test`). If you ever add a third long-lived branch, it
@@ -243,7 +247,8 @@ behavior, unchanged by any of this).
 
 ```mermaid
 flowchart LR
-    Trigger["Push to main/test, or a matching\nrepository_dispatch event\n(api-release-published /\napi-test-release-published)\nfrom the API repo"] --> Build["Build Vue frontend"]
+    Trigger["Push to main/test, or a matching\nrepository_dispatch event\n(api-release-published /\napi-test-release-published)\nfrom the API repo"] --> E2E["e2e job (push to test only):\nbrowser tests against a\nthrowaway stack on the runner"]
+    E2E --> Build["Run tests, build Vue frontend"]
     Build --> Download["Download the API release whose tag\nmatches this environment's pattern\n(^api-[0-9a-f]+$ vs ^api-test-[0-9a-f]+$)\n— NOT just 'latest'"]
     Download --> DeployProd["Build And Deploy (production)\n— default SWA environment"]
     Download --> DeployTest["Build And Deploy (test)\n— deployment_environment: test"]
@@ -270,6 +275,16 @@ Key points worth knowing when debugging this pipeline:
   runs in, so it couldn't see a private API repo's releases. (It worked without this token while
   the API repo was briefly public, which masked the need for it — worth knowing if this ever
   looks like it "used to just work.")
+- **Browser tests gate the test deploy** (24 Nov 2026, quality plan Q-04/Q-05): the `e2e` job runs on a push to `test`
+  and on demand ("Run workflow"), and the test deploy waits for it; a failed e2e stops the deploy, a skipped one (main,
+  dispatches, PRs) doesn't. It builds a throwaway stack on the runner: SQL Server 2025, Mailpit (catches every email)
+  and Azurite in Docker (`e2e/docker-compose.yml`), the newest test API release's `api-release.zip` run with `func start`
+  and its `e2e-kit.zip` to build and seed a new `SmiE2e<time>` database, and this commit's UI under `vite preview`. Then
+  it runs Playwright (`npm run e2e`, Chromium at 1366 and 390 px). Nothing reaches Azure, a live site or a real mailbox.
+  The API sends plain SMTP to Mailpit only because it runs in Development with a loopback mail host
+  (`EmailSettings.IsLocalCatcher`); production sending is unchanged. On failure the traces, videos and the API's log are
+  uploaded as the `e2e-report` artifact (kept 7 days). Main is not re-tested: it gets code that already passed on test,
+  which saves the private repo's Actions minutes (about 10 per run). Running it locally: `e2e/README.md` in the UI repo.
 - **The SWA deployment token** (`AZURE_STATIC_WEB_APPS_API_TOKEN` secret, this repo) is the one
   credential that, if rotated or regenerated in Azure, needs to be re-copied here by hand — it's
   not something either pipeline can self-heal.
@@ -1012,6 +1027,11 @@ the build and tests; the rest is reviewed. Each rule exists because of a real pr
   document so focus and dialogs behave, and the `<dialog>` / `CSS.escape` gaps filled). Test what a person does and
   hears: roles, names, keys, focus, what is emitted; not CSS classes. The shared pieces (AppDialog, ConfirmHost,
   MoreMenu, AppTabs, DisabledReason, StatTile, useUnsavedGuard) are covered.
+- [ ] A change to a main workflow (PO in, invoice out, the buyer's decision, who may do what) keeps the **browser tests**
+  passing and extends them (24 Nov 2026, quality plan Q-04): `npm run e2e` in the UI repo (§6.2, `e2e/README.md`). Find
+  things by role and name as a person would; each test makes its own data; read emails from Mailpit, never a real
+  mailbox. The seed (`tests/ShriyaMiningIndustries.E2eSeed`, API repo) goes through the API's own services, so it stays
+  in step with the app; anything new a workflow needs goes there.
 
 **Tests and release**
 - [ ] New behaviour has tests: procedures against a real database (`Repositories.Tests`), rules as unit tests.

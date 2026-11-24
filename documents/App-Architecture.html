@@ -247,9 +247,9 @@
       <text x="302" y="945" class="s">Docs (public, this reference)</text>
       <rect x="515" y="870" width="560" height="96" rx="8" fill="#fff" stroke="#24292f"/>
       <text x="527" y="892" class="t">GitHub Actions pipeline (push to test, then main)</text>
-      <text x="527" y="912" class="s">① build + tests (real SQL in a container)  ② DB migrations to that environment's</text>
-      <text x="527" y="929" class="s">database  ③ API release → UI workflow  ④ deploy screens + API to the Static Web App</text>
-      <text x="527" y="946" class="s">⑤ smoke test of the live site. Azure login by OIDC — no stored Azure password.</text>
+      <text x="527" y="912" class="s">① build + tests (real SQL in a container)  ② DB migrations to that environment</text>
+      <text x="527" y="929" class="s">③ API release → UI workflow; on test, browser tests on a throwaway stack first</text>
+      <text x="527" y="946" class="s">④ deploy to the Static Web App  ⑤ smoke test of the live site. OIDC, no Azure password.</text>
       <rect x="1090" y="870" width="375" height="96" rx="8" fill="#fff" stroke="#24292f"/>
       <text x="1102" y="892" class="t">Scheduled / on-demand jobs</text>
       <text x="1102" y="912" class="s">Uptime check every hour (prod + test,</text>
