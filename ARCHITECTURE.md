@@ -1006,6 +1006,12 @@ the build and tests; the rest is reviewed. Each rule exists because of a real pr
   screens; on touch screens text boxes are 16 px (`--font-size-input-touch`, else iOS Safari zooms on every tap) and
   buttons at least 2.5rem tall.
 - [ ] `npm run type-check`, `npm run test` and `npm run build` pass.
+- [ ] A new or split-out component comes with a **component test** (24 Nov 2026, quality plan Q-03): Vitest +
+  `@vue/test-utils`, with `// @vitest-environment happy-dom` at the top of that file only (everything else stays in the
+  fast `node` environment). Mount through `src/test/mount.ts` (`mountWithApp`: a memory router, attached to the
+  document so focus and dialogs behave, and the `<dialog>` / `CSS.escape` gaps filled). Test what a person does and
+  hears: roles, names, keys, focus, what is emitted; not CSS classes. The shared pieces (AppDialog, ConfirmHost,
+  MoreMenu, AppTabs, DisabledReason, StatTile, useUnsavedGuard) are covered.
 
 **Tests and release**
 - [ ] New behaviour has tests: procedures against a real database (`Repositories.Tests`), rules as unit tests.
@@ -1213,6 +1219,19 @@ follows these rules, next to §7.9 (devices) and §7.11 (error messages).
     entry there. (24 Nov 2026: "Admin" used to open the All menu, which the same click closed again.)
 - **Every link works:** `npm run check:devices` also opens every in-app link on every screen (`links.mjs`) and fails a
   link that doesn't reach a real page.
+- **The device check measures layout, not load speed** (24 Nov 2026), after runs failed on random screens with "0 h1
+  headings":
+  - `run.mjs` warms the dev server first, asking for every page, component and pre-bundled library once;
+  - `vite.config.ts` `optimizeDeps.include` bundles the on-demand libraries (exceljs, jspdf, html2canvas, heic-to) at
+    start-up instead of re-bundling and reloading an open page;
+  - a screen with no heading yet is opened once more with twice the wait before it counts;
+  - a browser tab that never opens or connects is a checker fault after 15 s (never a hang), and that width runs once
+    more;
+  - `run.mjs` refuses to start while anything already answers on 9333, 3000 or 7071, and stops its browser and servers
+    synchronously on exit: a headless browser left over from a stopped run had kept port 9333, and the next run's wide
+    widths all failed against that old browser.
+
+  `PARALLEL=2` lowers the load on a busy machine. A repo inside OneDrive makes all of this slower; see §15.1.
 - **Tabs inside a page** use `AppTabs` (WAI-ARIA tabs, `?tab=` in the address); keep every tab mounted (`v-show`) so
   switching keeps typed input. Company profile: Company · Email · Cloud storage.
 - **A tab is always highlighted:** `activeSection()` covers every route (`router/active-section.test.js` reads the router
@@ -1977,6 +1996,14 @@ theoretical — every step here was actually run successfully before being writt
 | Azure Functions Core Tools | v4 | `npm install -g azure-functions-core-tools@4` |
 | Azurite (local storage emulator) | any recent | `npm install -g azurite`, then run `azurite` in its own terminal (or use the Azurite extension in VS Code) |
 | Docker Desktop | any recent | **Recommended** — gives you a fully isolated local database with no external dependency at all. See §15.2 Option A. |
+
+**Where the repos live, and the UI's doctor (24 Nov 2026, quality plan Q-02):** keep the clones outside OneDrive (e.g.
+`C:\dev\Shriyamining`): OneDrive syncs `node_modules`, `bin` and `obj` and can break installs. On Windows, run commands from a path
+with a **capital** drive letter (`C:\…`, not Git Bash's `/c/…` mapped to `c:\…`): from a lower-case one, Vitest loads two copies
+of itself and every test file fails with "Cannot read properties of undefined (reading 'config')". The UI's `npm run doctor`
+(`scripts/doctor.mjs`, run before `npm test` and `npm run check:devices`) stops on that, on Node older than `engines`, and on
+`node_modules` older than `package-lock.json`; it warns when Node isn't the CI version (`.nvmrc`, which the pipeline also reads)
+and when the repo is inside OneDrive.
 
 ### 15.2 One-time setup — database
 
