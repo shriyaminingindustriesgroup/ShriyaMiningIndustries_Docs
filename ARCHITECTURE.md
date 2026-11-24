@@ -1204,8 +1204,15 @@ follows these rules, next to §7.9 (devices) and §7.11 (error messages).
   - `parsePayloadLogQuery` / `payloadLogLink`;
   - `parseHealthQuery` / `healthLink` (`services/log-links.ts`).
   Never hand-write a query string for another page.
-- **Admin pages say where they are:** the All tab reads "All · Health" (just All on phones), and `PageHeader` adds the
-  breadcrumb "Admin › Health" on every `/admin/*` page; "Admin" opens the All menu (`open-all-menu` event).
+- **Admin pages say where they are:**
+  - the All tab reads "All · Health" (just All on phones);
+  - `PageHeader` adds the breadcrumb "Admin › Health" on every `/admin/*` page;
+  - "Admin" links to the **Admin page** (`/admin`, `AdminHome.vue`), which lists every admin page the person may open,
+    with a line on each;
+  - the All menu and the Admin page read one list (`adminPages` in `services/navigation.ts`): a new admin page is one
+    entry there. (24 Nov 2026: "Admin" used to open the All menu, which the same click closed again.)
+- **Every link works:** `npm run check:devices` also opens every in-app link on every screen (`links.mjs`) and fails a
+  link that doesn't reach a real page.
 - **Tabs inside a page** use `AppTabs` (WAI-ARIA tabs, `?tab=` in the address); keep every tab mounted (`v-show`) so
   switching keeps typed input. Company profile: Company · Email · Cloud storage.
 - **A tab is always highlighted:** `activeSection()` covers every route (`router/active-section.test.js` reads the router
