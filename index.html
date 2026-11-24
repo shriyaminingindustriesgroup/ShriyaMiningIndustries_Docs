@@ -495,7 +495,8 @@ flowchart LR
   <p>Everything here is free (Application Insights used 0.56 GB of its free 5 GB a month on 18 Nov; daily cap 0.3 GB).</p>
   <ul>
     <li><strong>Admin → Health:</strong> tiles for 24 hours / 7 days / 30 days with targets (green or amber), every sign-in and every
-    email with the mail server's answer. From the app's own logs.</li>
+    email with the mail server's answer. From the app's own logs. Each tile opens its list for the same period, and each
+    logged error code opens Error logs filtered to it (23 Nov 2026); every logged error has a code.</li>
     <li><strong>Alerts</strong> (email, 6 metric rules): exception spike, failed requests, invoice email all failed, account email
     failed, sign-in locked, refused sign-ins burst. What to do for each: ARCHITECTURE.md §12.1.</li>
     <li><strong>Every deploy checks itself:</strong> <code>scripts/smoke-test.sh</code> (UI repo) runs against the live site
