@@ -385,6 +385,9 @@ empty database from V001–V029 + `R__` and running it again (only the `R__` fil
   `database/migrations/V003__seed-initial-data.sql` for the exact permission grants per role.
 - **`app` schema** — Vendor, Buyer, Invoice + InvoiceLine, PO import records, company profile, and
   related master data.
+- **Image library (V061, 25 Nov 2026)** — `app.ImageAsset` (one row per image, ID from 1001, audit columns, both
+  SHA-256 fingerprints, names unique ignoring capitals) and `app.ImageAssetContent` (the stored image and its
+  thumbnail, keyed by the same ID, so lists never read the bytes). Admin → Images; details in §7.14.
 - **Partial fulfillment (`sales` + `app`)** — `sales.POLine` is the durable PO ledger. Every
   uploaded row must carry a unique, uploader-maintained **Line Id** column (rejected otherwise,
   with the exact rows named); re-uploads match on it alone, so quantity updates — and even
@@ -1004,9 +1007,13 @@ the build and tests; the rest is reviewed. Each rule exists because of a real pr
 - [ ] A **new table gets a rule** in `database/refresh/tables.json` (`copy` from production, `keep` test's
   own, or `clear` for environment caches like cloud ids), and a new NOT NULL column gets a default (test may be a release ahead of production during a refresh).
   A test fails otherwise (§6.3).
-- [ ] No dynamic SQL in procedures (a test fails). The one reviewed exception is the test-data refresh's
-  `R__platform-70-data-refresh.sql`: it works on any table, so names are matched against the catalog and
-  passed through `QUOTENAME`; the test allows only that file and refuses any name joined in unquoted.
+- [ ] No dynamic SQL in procedures (a test fails). Two reviewed exceptions: the test-data refresh's
+  `R__platform-70-data-refresh.sql` (it works on any table) and the image delete's in-use check in
+  `R__platform-77-images.sql` (one `EXISTS` per foreign key that references `app.ImageAsset`, found in the catalogue).
+  In both, names are matched against the catalog and passed through `QUOTENAME`, values go in as parameters; the test
+  allows only these files and refuses any name joined in unquoted.
+- [ ] **Every foreign key to `app.ImageAsset` is `ON DELETE NO ACTION`** (never CASCADE or SET NULL, 25 Nov 2026):
+  the image delete keeps any image another table references, and finds those tables from the catalogue (§7.14).
 
 **API (C#)**
 - [ ] Builds with **0 warnings** (analyzers and code style are errors). Culture-safe text (ordinal
@@ -1377,6 +1384,62 @@ The full list of checks to come is in plan/ui-usability-review/06-Standards.md �
   `OrderedValue` in the Tracking PO summary (`R__platform-21-po-ledger.sql`), worked out as on Purchase Orders: lines
   the buyer removed are left out. A PO with no prices (a manual PO before prices) shows its quantity as before.
 
+### 7.14 Admin → Images: the image library (25 Nov 2026)
+
+The owner's image library: product, crate and loading photos and stone samples, kept **in the database** (decision
+D5; plan/admin-images). Expected volume 200–300 images, at most about 1 GB with thumbnails. Next release (D6): images
+mapped to crate types and SKUs, as link tables with a foreign key to the image.
+
+**The screen** (`/admin/images`, `AdminImages.vue`; Admin role with `image.view` to see and `image.manage` to change,
+both granted to Admin by V061; a card on the Admin page):
+- **Upload** (`ImageUploadPanel`): choose or drop up to **30** JPG/PNG files, each up to **500 MB** as chosen. In the
+  browser (`services/image-library.ts`), one at a time: type by its first bytes; SHA-256 of the file as chosen, read
+  8 MB at a time (`hash-wasm` 4.13.0, MIT); opened upright; a small image re-saved once (drops GPS metadata); a large
+  one resized to 2560 px and stepped down (JPEG 0.85 → 0.78 → 0.70, then 2048 and 1600 px) until it is at most **3 MB**;
+  a PNG with transparent areas stays PNG, a PNG photo becomes JPG (D2); a **400 px / 100 KB** thumbnail. Uploads go
+  three at a time, with per-file status, Retry and a summary. The API takes at most 30 MB a request, which is why
+  everything is compressed first.
+- **Clashes, before anything is compressed** (D4, one `POST console/images?check=1` for the whole selection): the same
+  file contents (by fingerprint, never the name) → pop-up *Skip* / *Replace the existing image* (same ID: the file,
+  name and fingerprints change, CreatedOn/By stay) / *Upload anyway*; a different image with a name in use → *Rename*
+  (checked again) / *Add a number* ("crate 1", "crate 2": the database picks the next free number under a lock);
+  "do the same for the other clashes of this kind"; files of one selection clash with each other too.
+- **Grid**: 50 thumbnails a page (D1), newest first, square buttons named "Open <name>"; search by part of a name
+  (`%`, `_`, `[` literal); `?q=&page=` in the address; a shared `ListPager`. **Viewer**: `AppDialog`, Previous/Next
+  (buttons, arrow keys, swipe), Download, Rename (rowVersion → 409), Delete.
+- **Select → Delete selected**: tick boxes kept across pages and searches; asks first; 100 per call; the summary says
+  "10 deleted. 2 kept because they're in use: … (used by …)". Health has an **Images** tile (count and stored size,
+  opens the screen).
+
+**The data** (V061, procedures in `R__platform-77-images.sql`): `app.ImageAsset` (`IDENTITY(1001,1)`; Name unique,
+`UX_ImageAsset_Name`, on the case-insensitive column; ContentType `image/jpeg|image/png`; sizes, width, height;
+`Sha256` of the stored file and `OriginalSha256` of the file as chosen; audit columns and RowVersion; **no soft
+delete**) and `app.ImageAssetContent` (PK = FK to the image; `Content` and `Thumbnail`). Lists, searches and the
+check never read `ImageAssetContent`. Test keeps its own images (`tables.json`: `keep` for both). Error codes
+`IMAGE-INVALID`, `IMAGE-TOO-LARGE`, `IMAGE-DUPLICATE`, `IMAGE-NAME-EXISTS`, `IMAGE-NOT-FOUND`.
+
+**The in-use rule (owner, 25 Nov 2026):** `usp_ImageAsset_Delete` is a **hard delete** (D3: rows and bytes go; the
+API logs who deleted which image), but it never deletes an image whose ID another table references by a foreign key.
+It reads every foreign key that points at `app.ImageAsset` from `sys.foreign_keys` (except its own content table) and
+runs one `EXISTS` per key with `sp_executesql`, names `QUOTENAME`d, so a future crate or SKU link table is covered
+without changing it. Each image gets its own outcome (`Deleted`, `InUse` with the tables, `Changed`, `NotFound`); a
+race that still hits a foreign key (error 547) is reported as in use, never a 500. Hence the §7.8 rule: every foreign
+key to `app.ImageAsset` is `ON DELETE NO ACTION`.
+
+**The API: one function, `Images`** (`console/images/{id:int?}/{part?}`, get/post/put/delete; Media module:
+`ImageLibraryService`, `ImageFileInspector`, `ImageAssetRepository`). The Static Web App deploys at most 162 functions
+(§12), so two pairs were merged first (`PayloadLogSettings` = get+put; `SetUserStatus` = disable|enable, same routes):
+the API is at **161**. The server trusts nothing: request ≤ 8 MB, image ≤ 3 MB, thumbnail ≤ 100 KB, JPEG/PNG by magic
+bytes, width and height from the JPEG SOF / PNG IHDR header only (no image library, nothing decoded), ≤ 2560 / 400 px,
+its own SHA-256. Image bytes are served with `Cache-Control: private, max-age=31536000, immutable`, an ETag (304) and
+`nosniff`; the screen adds the image's `version` (start of its SHA-256) to the address, so a replaced image is never
+shown from the cache. `console/images` is never payload-logged (images are files).
+
+**Cost: $0.** No new Azure resource. At ~1 GB the images use about 3% of the database's free 32 GB (and of the free
+backup storage); thumbnails are ~40 KB and cached, so viewing uses little of the Static Web App's 100 GB a month. Above
+32 GB the database would pay $0.138 per GB-month (General Purpose data stored, Central US, Azure Retail Prices API,
+25 Nov 2026); Blob Storage would be about $0.018. §12 says what to do near 32 GB.
+
 ## 8. Authentication & authorization
 
 **Our own sign-in (login plan Epic 2, V043, 18 Nov 2026; password only for now, plan decision D16).**
@@ -1564,6 +1627,7 @@ max 1–2 hours/day), verified against real Azure pricing rather than assumed:
 | SQL Databases (both) | Azure SQL free offer applied (`useFreeLimit: true`, confirmed via `az sql db show`): 100,000 vCore-seconds + 32GB storage free per database per month, for the life of the subscription. At 0.5 vCore minimum, that's ≈55.6 hours of active compute free per database per month — comfortably covers the stated 1–2 hrs/day ceiling. Default behavior on exceeding the limit is auto-pause, not a surprise bill. |
 | Application Insights | Shared single instance across all four API deployments rather than one per environment — avoids multiplying ingestion volume for no benefit at this telemetry volume. |
 | This docs site (GitHub Pages) | Free for a public repo. |
+| Image library (§7.14) | Stored in the database inside its free 32 GB (owner's 200–300 images ≈ 1 GB); no new resource. Above 32 GB: $0.138 per GB-month (General Purpose data, Central US, Azure Retail Prices API, 25 Nov 2026). Thumbnails are small and cached for a year, so viewing uses little of the Static Web App's 100 GB a month. |
 | Test-data refresh (§6.3) | GitHub Actions minutes in the private API repo (a ~1-minute check each day plus the run itself), inside the free monthly minutes. While it runs, both databases are awake: a weekly run uses a small part of each database's free 100,000 vCore-seconds; after the allowance, the same pay-as-you-go rate as any other use. Nothing runs between refreshes. |
 
 **Known cost risk, not a concern today:** the Functions execution grant is subscription-wide, not
@@ -1719,6 +1783,19 @@ GitHub secret holds something, name it — never paste the value.
 These are real incidents from building this system, kept here because they'll recur and the fix
 is non-obvious each time.
 
+**The database nears its free 32 GB (the image library, §7.14).** Not expected at the owner's 200–300 images (~1 GB),
+but if Admin → Health's *Images* tile goes amber (over 20 GB stored) or the library grows past a few thousand images:
+1. See what takes the space: `EXEC sp_spaceused` and `sp_spaceused 'app.ImageAssetContent'` in the Query editor.
+2. Delete images nobody needs (Admin → Images → Select). Freed space is reused by later uploads; **never schedule
+   `SHRINKDATABASE`** (it fragments indexes and the file grows back).
+3. Optionally add a size alert (free: the first 10 metric alert time series are free): Azure portal → SQL databases →
+   shriyaminingdb → Alerts → Create → Alert rule → signal *Data space used* → Static, Greater than, 20 GB
+   (21474836480 bytes), Maximum, every 1 hour → action group ShriyaMiningAlerts → name `ShriyaMining-DbSize-20GB`.
+4. Past ~10,000 images, move the bytes to Blob Storage (about $0.018 per GB-month): only `ImageAssetRepository` and
+   `app.ImageAssetContent` change.
+
+Above 32 GB the database keeps working and pays $0.138 per GB-month for the extra (production continues with charges).
+
 **"Failed to deploy the Azure Functions" on every try, after ~30 s, nothing else in the log (25 Nov 2026).**
 From about 23:00 UTC on 24 Nov, Azure refused every new API package for this Static Web App, in both
 environments: our 163-function build (test, five tries), a 162-function build of the same change (test), and the
@@ -1734,7 +1811,8 @@ API each time.
   once (each deploy waits for the other).
 - **Kept anyway:** Delete PO shares the PO edit function (`DELETE po-ledger/po-edit`), and `FunctionCountTests`
   stops the API growing past 162 functions (the most this app has deployed), so the count can be ruled out quickly
-  next time.
+  next time. To make room for Images (25 Nov 2026) two pairs were merged (`PayloadLogSettings`, `SetUserStatus`, same
+  routes): the API has **161** (`functions.metadata` of a Release publish), one spare.
 - **How to look next time:** `az login --tenant <directory id>` (a browser sign-in; sign-in codes are blocked
   in this directory). Then check `az staticwebapp environment list` (status Failed per environment) and query
   Application Insights for `traces | where message has "job function(s)"` to see whether Azure started the build.

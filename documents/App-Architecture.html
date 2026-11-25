@@ -171,7 +171,7 @@
       <text x="850" y="590" text-anchor="middle" class="t">shriyaminingdbtest</text>
       <text x="850" y="607" text-anchor="middle" class="xs">test data</text>
     </g>
-    <text x="304" y="640" class="xs">Schema by DbUp migrations (V###, run once; R__ procedures, every deploy) · app logs in tables (errors, payloads, emails, sign-ins)</text>
+    <text x="304" y="640" class="xs">Schema by DbUp migrations (V###, run once; R__ procedures, every deploy) · app logs in tables · image library (ImageAsset + bytes)</text>
 
     <!-- Monitoring -->
     <rect x="288" y="662" width="754" height="134" rx="12" fill="#ffffff" stroke="#1f5f99" stroke-width="1.5"/>
@@ -309,7 +309,7 @@
     <thead><tr><th>Connection</th><th>What it's for</th><th>How the app connects</th><th>Secret kept in</th><th>Cost</th></tr></thead>
     <tbody>
       <tr><td>Static Web App (Azure)</td><td>Hosts the screens and the API for production and test; HTTPS; custom domain</td><td>GitHub Actions deploys with a deployment token; users reach it over HTTPS</td><td>GitHub secret</td><td>$0 (Free tier)</td></tr>
-      <tr><td>Azure SQL (2 databases)</td><td>All business data, users, sessions, logs, archive queue</td><td>API → SQL with a limited database user (stored procedures only)</td><td>SWA settings</td><td>Free offer; prod pays as you go only above it</td></tr>
+      <tr><td>Azure SQL (2 databases)</td><td>All business data, users, sessions, logs, archive queue; the image library (Admin → Images: images and previews, ~1 GB expected)</td><td>API → SQL with a limited database user (stored procedures only)</td><td>SWA settings</td><td>Free offer; prod pays as you go only above it</td></tr>
       <tr><td>Application Insights + alerts</td><td>See errors and traffic; email when something breaks; budget warnings</td><td>API sends telemetry; 6 metric alerts → action group email</td><td>SWA settings (connection string)</td><td>$0 within free limits</td></tr>
       <tr><td>Zoho Mail (SMTP)</td><td>Invoice emails to buyers, password links, alert emails</td><td>SMTP login per sending service (MailKit)</td><td>SWA settings (app-specific password)</td><td>Existing Zoho plan</td></tr>
       <tr><td>Google Drive (archive)</td><td>Copy of each invoice's latest status PDF; every uploaded PO file</td><td>OAuth 2.0, scope <code>drive.file</code>, one-time Admin <i>Connect</i>; refresh token stored AES-GCM encrypted</td><td>SWA settings: client ID/secret, encryption key</td><td>$0 (15 GB free Google storage)</td></tr>
@@ -323,12 +323,13 @@
 
   <div class="cols">
     <div class="flows">
-      <h2>Four journeys through the system</h2>
+      <h2>Journeys through the system</h2>
       <ol>
         <li><b>Sign-in:</b> staff open app.shriyamining.com → email + password checked by the API (PBKDF2 + secret pepper) → session cookie (HttpOnly, 60 min idle, 12 h max) → every API call checks role and permission.</li>
         <li><b>Invoice to buyer:</b> staff build the invoice from POs → the browser makes the PDF → API saves it and emails the buyer through Zoho with a private review link → buyer opens <code>/review</code>, approves or rejects → status and history update; the staff see it at once.</li>
         <li><b>Insights:</b> the proprietor opens Insights → one call to the API → five read-only procedures work out totals, pipeline, attention, buyers and shipping from the live data → every figure links to its list. Nothing runs on a timer.</li>
         <li><b>Archive to Drive:</b> any status change writes a "save" task in the same database step → the browser sends the PDF → API uploads it to <code>Invoice/Buyer/Year</code> and moves the previous status's file to the bin. Uploaded POs go to <code>PO's/Buyer/Year</code>. Failures are listed with Retry and raise an alert.</li>
+        <li><b>Images:</b> an Admin chooses up to 30 photos → the browser fingerprints them and asks the API once about clashes (same file, same name) → each is made smaller in the browser (≤ 2560 px, ≤ 3 MB, a 400 px preview) → one API call per image stores it in the database → the grid shows previews, cached for a year. A delete never removes an image another table uses.</li>
         <li><b>A change reaching users:</b> developer pushes to <code>test</code> → pipeline tests, migrates the test database, deploys, smoke-tests → checked on the test site → the same commit is pushed to <code>main</code> → production. Rollback = redeploy the previous release.</li>
       </ol>
     </div>
