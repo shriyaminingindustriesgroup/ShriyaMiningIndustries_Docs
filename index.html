@@ -399,6 +399,15 @@ flowchart LR
   opens every screen at all 11 widths before a release.</p>
   <p><strong>Error messages (23 Nov):</strong> when something fails, people see a plain message ("The server had a problem answering. Please try again in a moment.") and a short reference to quote, never technical text. Failures the API never saw (a time-out in front of it) are reported by the browser and logged too, so Admin → Error logs finds every one by its reference (ARCHITECTURE §7.11 maps each technical failure to its message).</p>
   <p><strong>Insights (23 Nov):</strong> a dashboard for the people who run the business (Admin, Manager): invoiced and delivered against the previous period, money in each stage, the PO backlog, what needs attention (waiting for the buyer, rejected, not shipped, late or untouched POs), top buyers and products, what's ready to ship or on the water, and destinations. Every figure links to its list; worked out on request from the app's own data, so it adds no cost. Its <em>Invoice to POs</em> chart shows what POs ordered, how much is invoiced and what remains, by month, quarter, year or all time, for every product or one. Password boxes show the password with an eye inside the box.</p>
+  <p><strong>Images (25 Nov):</strong> Admin → <em>Images</em> is the image library, kept in the database: upload up to 30
+  JPG/PNG at a time (each up to 500 MB as chosen; the browser makes large ones smaller first, at most 2560 px and 3 MB,
+  with a 400 px preview), 50 previews a page, search by part of a name, a full-size viewer with Rename and Delete, and
+  Select → Delete selected. The same file uploaded again (found by its SHA-256, never its name) asks <em>Skip</em>,
+  <em>Replace the existing image</em> or <em>Upload anyway</em>; a name already used asks <em>Rename</em> or <em>Add a
+  number</em> ("crate 1"). A delete is for good, but never of an image another table uses (any foreign key to the image
+  table, so the coming crate and SKU links are covered). One API function, so the API stays at 161 of the 162 the
+  Static Web App deploys. $0: about 1 GB for the expected 200–300 images, inside the database's free 32 GB. See
+  ARCHITECTURE.md §7.14.</p>
   <p><strong>Photo folders (20 Nov):</strong> <em>Add photos ▾</em> in the send pop-up also offers the Google Drive
   folders an Admin set up (Cloud storage → Photo folders: paste the link, <em>Check and save</em>). A picker shows the
   images newest first with thumbnails; the app reads the folders with its own read-only photo reader (a Google service
@@ -486,6 +495,7 @@ flowchart LR
     <li>Functions Consumption plan — 1M executions + 400,000 GB-s free per month, <em>per subscription</em>, shared across both Function Apps.</li>
     <li>Both SQL databases have the Azure SQL free offer applied — 100,000 vCore-seconds + 32GB free per database per month, for the life of the subscription.</li>
     <li>Test-data refresh — GitHub Actions minutes within the free allowance; the databases are awake only while it runs.</li>
+    <li>Image library — stored in the database inside its free 32 GB (~1 GB for 200–300 images); above 32 GB it would be $0.138 per GB-month (Azure Retail Prices API, 25 Nov 2026).</li>
   </ul>
   <p class="dim">Full breakdown in <a href="https://github.com/shriyaminingindustriesgroup/ShriyaMiningIndustries_Docs/blob/main/ARCHITECTURE.md#10-cost-model">ARCHITECTURE.md §10</a>.</p>
 </section>
