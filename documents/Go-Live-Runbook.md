@@ -60,7 +60,9 @@ today. If the clean-up goes wrong, the database can be restored to a moment befo
 
 ## Part B: Clean out test / junk data
 
-**Users, roles and permissions are not touched.** Manage them yourself (Admin → Users / Roles).
+**Everything under Admin's set-up pages is kept, always** (agreed 2026-11-25): users, roles and permissions,
+buyers (with their ship-to addresses and invoice email lists), crate types, delivery rules and the company
+profile (its Services, email templates and app settings too). The script has no way to delete them.
 
 Open Azure portal → the database (`shriyaminingdbtest` or `shriyaminingdb`) → **Query editor**.
 
@@ -73,7 +75,7 @@ transaction: if anything fails, nothing is deleted.
 
 1. Make sure you're in the right database (`shriyaminingdbtest` or `shriyaminingdb`).
 2. Paste the script and run it.
-3. Check the counts at the end: invoices and POs 0; buyers, users and roles unchanged.
+3. Check the counts at the end: invoices and POs 0; buyers, crate types, delivery rules, users and roles unchanged.
 
 To only see the counts without deleting, change the line to `DECLARE @Confirm NVARCHAR(50) = N'';`.
 
@@ -81,52 +83,49 @@ Settings at the top of the script:
 
 | Setting | Default | Meaning |
 |---|---|---|
-| `@KeepBuyers` | `1` | Buyers and their ship-to addresses are **kept** (they're added by hand in Admin → Buyers). `0` deletes them too |
-| `@KeepCrateTypes` | `1` | Crate types are **kept**: invoice lines need them for crate sizes and the container fit check |
-| `@ClearLogs` | `1` | Clears the error log and event log |
+| `@ClearLogs` | `1` | Clears the error log, event log, email log and API payload log |
 
-Always kept: users, roles, permissions, the company profile, buyers and crate types (by default), error codes,
-and the migration journal.
+Always kept: users, roles, permissions, buyers (ship-to addresses, invoice email lists), crate types, delivery
+rules, the company profile, error codes, and the migration journal. (Until 2026-11-25 buyers and crate types had
+`@KeepBuyers` / `@KeepCrateTypes` switches that could delete them; they were removed.)
 
-### Option 2: the manual script (same result, no row counts or confirm step)
+### Option 2: the manual script (the same deletes as the safe script, without row counts or the confirm step)
 ```sql
 SET XACT_ABORT ON;   -- any error rolls back everything
-DECLARE @KeepBuyers BIT = 1;   -- 1: keep buyers and their ship-to addresses (the default); 0: delete them too
 BEGIN TRAN;
 
--- Invoices (uploads point at invoices; invoice lines point at PO lines)
-DELETE FROM app.LegacyInvoiceUpload;
-DELETE FROM app.InvoiceLine;
-DELETE FROM app.InvoiceSnapshot;
-DELETE FROM app.InvoiceStatusChange;
-DELETE FROM app.InvoiceHistory;
+-- Invoices and everything hanging off them (emails to buyers point at invoices).
+DELETE FROM app.InvoiceReviewDecision;
+DELETE FROM app.InvoiceReviewRecipient;
+DELETE FROM app.InvoiceReviewRequest;
 DELETE FROM app.InvoiceContainerFit;
+DELETE FROM app.InvoiceStatusChange;
+DELETE FROM app.InvoiceSnapshot;
+DELETE FROM app.InvoiceLine;
+DELETE FROM app.LegacyInvoiceUpload;
+DELETE FROM app.InvoicePurchaseOrder;
 DELETE FROM app.Invoice;
 
--- Break the two circular links
-UPDATE sales.PurchaseOrder SET CurrentDocumentId = NULL;  -- PO -> its current PDF
-UPDATE sales.POLine        SET LatestImportRowId = NULL;  -- PO line -> its latest stored row
-
--- Children before parents
-DELETE FROM sales.POEdit;         -- Edit PO history (who changed what, and why)
+-- POs: break the two loops (PO line <-> its latest upload row, PO <-> its current PDF) first.
+UPDATE sales.POLine SET LatestImportRowId = NULL WHERE LatestImportRowId IS NOT NULL;
+UPDATE sales.PurchaseOrder SET CurrentDocumentId = NULL, ShipToAddressId = NULL
+  WHERE CurrentDocumentId IS NOT NULL OR ShipToAddressId IS NOT NULL;
+DELETE FROM sales.POEdit;         -- Edit PO history
 DELETE FROM sales.POStatus;       -- stored PO statuses
-DELETE FROM sales.POImportRow;    -- -> POLine, POImportBatch
-DELETE FROM sales.POLine;         -- -> PurchaseOrder, POImportBatch
-DELETE FROM sales.PODocument;     -- -> PurchaseOrder (the stored PDFs)
-DELETE FROM sales.PurchaseOrder;
+DELETE FROM sales.POImportRow;
+DELETE FROM sales.POLine;
 DELETE FROM sales.POImportBatch;
+DELETE FROM sales.PODocument;     -- the stored PDFs
+DELETE FROM sales.PurchaseOrder;
 
--- Buyers: kept unless @KeepBuyers = 0 (they're added by hand in Admin → Buyers)
-IF @KeepBuyers = 0
-  BEGIN
-    DELETE FROM app.BuyerAddress;
-    DELETE FROM app.Buyer;
-  END;
+-- Optional: the logs (the safe script does this when @ClearLogs = 1).
+-- DELETE FROM log.ErrorLog; DELETE FROM log.ApplicationEvent; DELETE FROM app.EmailLog; DELETE FROM log.PayloadLog;
 
+-- Buyers, crate types, delivery rules, users, roles and the company profile are never deleted.
 COMMIT;
 ```
-Order matters: `app.LegacyInvoiceUpload` must go **before** `app.Invoice` (it points at invoices),
-or the whole transaction rolls back.
+Order matters (children before parents): a wrong order stops on a foreign key and the whole transaction
+rolls back, so nothing is half-deleted.
 
 ---
 
