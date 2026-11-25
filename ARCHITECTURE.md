@@ -1265,7 +1265,9 @@ follows these rules, next to §7.9 (devices) and §7.11 (error messages).
     synchronously on exit: a headless browser left over from a stopped run had kept port 9333, and the next run's wide
     widths all failed against that old browser.
 
-  `PARALLEL=2` lowers the load on a busy machine. A repo inside OneDrive makes all of this slower; see §15.1.
+  `PARALLEL=2` lowers the load on a busy machine. A repo inside OneDrive makes all of this slower; see §15.1. The link
+  check (`links.mjs`) stops with a CHECKER FAULT when the browser stops answering and a fresh tab can't be opened, and
+  gives up after 15 minutes (`LINKS_MINUTES`): a stuck browser once made it crawl for hours (25 Nov 2026).
 - **Tabs inside a page** use `AppTabs` (WAI-ARIA tabs, `?tab=` in the address); keep every tab mounted (`v-show`) so
   switching keeps typed input. Company profile: Company · Email · Cloud storage.
 - **A tab is always highlighted:** `activeSection()` covers every route (`router/active-section.test.js` reads the router
@@ -1341,7 +1343,20 @@ So Back, refresh and a shared link show the same list.
 - a console error or uncaught exception;
 - a visible control with no name (closed `<details>` menus skipped);
 - a pop-up that doesn't open as a modal `<dialog>`, take the focus, fit the screen, close on Esc and give the focus
-  back (the admin forms, at every width).
+  back (the admin forms, at every width);
+- **a serious or critical accessibility finding** (S8.8, quality plan Q-06, 25 Nov 2026): axe-core (`axe-core`, dev
+  dependency) runs on every screen at 1366 and 390 px with the WCAG 2.0/2.1/2.2 A and AA rules. Moderate and minor
+  findings don't fail; they're listed in `device-check-out/a11y.txt`. A known exception goes in
+  `scripts/device-check/a11y-allow.json` as `{ rule, selector, reason, date }` (all four required, or the check
+  refuses to run) and is listed as allowed. It was empty when this went in.
+
+  What the first run found, all fixed: names that didn't match the visible words (the top-bar title, dashboard tiles:
+  now named by their content), the Draft chip's contrast (3.2 → 5.0:1), boxes that scroll sideways not reachable by
+  keyboard (the `v-scroll-region` directive makes them focusable and named only while they scroll; put it on any new
+  `.table-wrap`), links inside sentences told apart by colour only (now underlined), and `aria-label` on a plain span
+  (sparklines: `role="img"`). A screen-reader review of workflows 1–3 (plan/quality-uplift/05-Screen-Reader-Pass.md)
+  also fixed the password box's name ("Password", not "Password Show password") and the buyer page's required
+  fields and error message.
 The full list of checks to come is in plan/ui-usability-review/06-Standards.md §S8.
 
 ### 7.13 Fixes from the owner's list (24 Nov 2026)
@@ -2044,6 +2059,11 @@ the app.
 
 - Insights dashboard: **release 1 built 23 Nov 2026** (§5 row). Release 2 candidates: record payments (then received / outstanding and ageing), a settings screen for the attention limits, approval speed per buyer, deep filter links into Invoices, a weekly digest email.
 
+- Quality plan (plan/quality-uplift, 24 Nov 2026): Q-02 to Q-06 built and live. **Q-08 to Q-11 are to be done** (owner,
+  25 Nov 2026): split `POImport.vue` (and look into a once-in-120-runs Save click that did nothing) and `PoTracking.vue`,
+  the API's OpenAPI contract (also mark the invoice header's CreatedOn/ModifiedOn as UTC) and UI types generated from
+  it. Also open: Q-01 (repos out of OneDrive), Q-07 (split `api.ts`), Q-12 to Q-14; required-field asterisks read as
+  "star" on most forms and a person's NVDA check (plan/quality-uplift/05-Screen-Reader-Pass.md, F1/F2).
 - Key Vault centralization for the SQL password (§11) — architecture decided, not yet built.
 - Custom domain (19 Nov 2026): production's own domain (DNS CNAME at the registrar, portal Custom domains step,
   done by the owner) serves the app at its root. For a few hours that day the app lived under `/invoices`; the
