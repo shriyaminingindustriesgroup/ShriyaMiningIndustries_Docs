@@ -1330,6 +1330,24 @@ So Back, refresh and a shared link show the same list.
   back (the admin forms, at every width).
 The full list of checks to come is in plan/ui-usability-review/06-Standards.md §S8.
 
+### 7.13 Fixes from the owner's list (24 Nov 2026)
+
+- **Delete PO (Admin).** `POST po-ledger/po-delete` → `sales.usp_PurchaseOrder_Delete` (in `R__platform-22-purchase-orders.sql`,
+  no new migration). It needs a reason, takes the same `POEdit:{buyer}:{po}` app lock and version check as Edit PO, and is
+  refused (409) while any line is on an invoice that isn't deleted, naming those invoices. It marks the PO and its lines
+  deleted, drops the PO's stored status and writes a `sales.POEdit` row (`"after":"deleted"`), so the history keeps who,
+  when and why. The PO number (and the PDF) can be uploaded again. Screens: **Delete PO** on Edit PO, and in the ⋯ menu
+  on Purchase Orders and on Tracking › PO (both open Edit PO with `?delete=1`, which asks straight away).
+- **Missing crate sizes at Save** are shown on the **Lines** tab of New Invoice (the empty boxes outlined, with
+  **Save anyway**) before the container fit check runs; the fit pop-up used to open over the Shipping tab.
+- **Tracking icon:** every link to Tracking uses the menu's `route` icon (`chart` is Insights).
+- **Tracking › Product** names and details use the same sizes as the PO and Invoice views.
+- **Compact page headers:** the page starts 1rem under the menu (was 2rem), a 2rem icon tile (was 2.4rem), and 0.5rem
+  between the header and the content (was 1.5rem). Nothing in the header was removed.
+- **Tracking › PO, Ordered and Remaining in $** (`$8,030.48`) with the quantity under it. Ordered $ is a new
+  `OrderedValue` in the Tracking PO summary (`R__platform-21-po-ledger.sql`), worked out as on Purchase Orders: lines
+  the buyer removed are left out. A PO with no prices (a manual PO before prices) shows its quantity as before.
+
 ## 8. Authentication & authorization
 
 **Our own sign-in (login plan Epic 2, V043, 18 Nov 2026; password only for now, plan decision D16).**
