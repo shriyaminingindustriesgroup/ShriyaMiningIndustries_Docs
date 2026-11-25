@@ -285,6 +285,20 @@ Key points worth knowing when debugging this pipeline:
   (`EmailSettings.IsLocalCatcher`); production sending is unchanged. On failure the traces, videos and the API's log are
   uploaded as the `e2e-report` artifact (kept 7 days). Main is not re-tested: it gets code that already passed on test,
   which saves the private repo's Actions minutes (about 10 per run). Running it locally: `e2e/README.md` in the UI repo.
+  What they cover (Q-05, 24 Nov 2026), each at 1366 and 390 px: a User uploads a PO PDF and it's on Purchase Orders with
+  every line open (`01-po-in`); a Manager makes an invoice from a PO, saves, changes it (and is asked before leaving
+  unsaved), saves and sends it for approval, and Mailpit has the approver's own link (`02-invoice-out`); the approver
+  opens that link signed out and approves, and the invoice, Activity, Invoices and Tracking all say Approved
+  (`03-buyer-decides`); a User is sent away from Admin and the API answers 403 (`04-permissions`). Specs 02 and 03
+  make their own PO with a unique number through the API (`createPo`), so runs and retries never share lines. Bugs
+  they found on the first day, all fixed the same day:
+  - Tracking by invoice sorted invoice numbers as text (9 before 10 on the same day): procedures now order by length,
+    then text (repository test `TrackingByInvoice_OrdersNumbersAsNumbers_OnTheSameDay`).
+  - A review link opened in the seconds between the email going out and the invoice's save finishing said "This link
+    is no longer in use": it now says the invoice is still being sent (state `pending`).
+  - Activity's Versions showed UTC as local time (5 hours out next to Status changes): the times are now marked UTC.
+  - The ⋯ menu closed as it opened on phones while the page was still settling (it closed on any scroll): it now
+    follows its button and closes only when the button leaves the screen.
 - **The SWA deployment token** (`AZURE_STATIC_WEB_APPS_API_TOKEN` secret, this repo) is the one
   credential that, if rotated or regenerated in Azure, needs to be re-copied here by hand — it's
   not something either pipeline can self-heal.
