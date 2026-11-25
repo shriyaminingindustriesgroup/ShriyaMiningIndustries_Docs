@@ -1332,7 +1332,7 @@ The full list of checks to come is in plan/ui-usability-review/06-Standards.md �
 
 ### 7.13 Fixes from the owner's list (24 Nov 2026)
 
-- **Delete PO (Admin).** `POST po-ledger/po-delete` → `sales.usp_PurchaseOrder_Delete` (in `R__platform-22-purchase-orders.sql`,
+- **Delete PO (Admin).** `DELETE po-ledger/po-edit` (the same function as saving an edit, see §12 "163rd function") → `sales.usp_PurchaseOrder_Delete` (in `R__platform-22-purchase-orders.sql`,
   no new migration). It needs a reason, takes the same `POEdit:{buyer}:{po}` app lock and version check as Edit PO, and is
   refused (409) while any line is on an invoice that isn't deleted, naming those invoices. It marks the PO and its lines
   deleted, drops the PO's stored status and writes a `sales.POEdit` row (`"after":"deleted"`), so the history keeps who,
@@ -1689,6 +1689,23 @@ GitHub secret holds something, name it — never paste the value.
 
 These are real incidents from building this system, kept here because they'll recur and the fix
 is non-obvious each time.
+
+**"Failed to deploy the Azure Functions" on every try, after ~30 s, nothing else in the log (25 Nov 2026).**
+Adding Delete PO as a new function took the API from 162 to 163 functions, and the Static Web App's built-in
+API refused that package five times in a row (test kept running the previous API). Application Insights showed
+why it isn't our code: every host start logs `Generating N job function(s)`, and the 163-function build never
+started anywhere. Azure rejected it at its own provisioning step. The 162-function build before it had failed
+twice and gone through on the third try, so 162 is at the edge. Microsoft publishes no such limit and gives no
+inner error (open issues Azure/static-web-apps #1820, #1821, #1762 describe the same).
+- **Rule until the API moves to its own Function App:** don't add functions. Give an existing function another
+  HTTP method on its route (Delete PO is `DELETE po-ledger/po-edit`, beside `POST` for saving). The API test
+  `FunctionCountTests` fails above 162 (our functions plus the 4 OpenAPI ones; `functions.metadata` has the
+  real count).
+- **How to look next time:** `az login --tenant <directory id>` (a browser sign-in; sign-in codes are blocked
+  in this directory), then query Application Insights for `traces | where message has "job function(s)"`.
+  The `Process reporting unhealthy … AzureWebJobsStorage` warnings are normal for this kind of API; ignore them.
+- **Lasting fix (not done yet):** merge related functions, or run the API on its own Function App
+  (`ShriyaMiningIndustries-api` / `-api-test`, stopped today), which has no such limit.
 
 **"degraded" health status / `Error Number:40613` / connection timeouts against SQL.**
 Azure SQL Serverless auto-pauses after 60 minutes idle (`autoPauseDelay: 60`, both databases).
