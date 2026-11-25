@@ -1332,7 +1332,7 @@ The full list of checks to come is in plan/ui-usability-review/06-Standards.md �
 
 ### 7.13 Fixes from the owner's list (24 Nov 2026)
 
-- **Delete PO (Admin).** `DELETE po-ledger/po-edit` (the same function as saving an edit, see §12 "163rd function") → `sales.usp_PurchaseOrder_Delete` (in `R__platform-22-purchase-orders.sql`,
+- **Delete PO (Admin).** `DELETE po-ledger/po-edit` (the same function as saving an edit, see §12 "Failed to deploy the Azure Functions") → `sales.usp_PurchaseOrder_Delete` (in `R__platform-22-purchase-orders.sql`,
   no new migration). It needs a reason, takes the same `POEdit:{buyer}:{po}` app lock and version check as Edit PO, and is
   refused (409) while any line is on an invoice that isn't deleted, naming those invoices. It marks the PO and its lines
   deleted, drops the PO's stored status and writes a `sales.POEdit` row (`"after":"deleted"`), so the history keeps who,
@@ -1691,21 +1691,28 @@ These are real incidents from building this system, kept here because they'll re
 is non-obvious each time.
 
 **"Failed to deploy the Azure Functions" on every try, after ~30 s, nothing else in the log (25 Nov 2026).**
-Adding Delete PO as a new function took the API from 162 to 163 functions, and the Static Web App's built-in
-API refused that package five times in a row (test kept running the previous API). Application Insights showed
-why it isn't our code: every host start logs `Generating N job function(s)`, and the 163-function build never
-started anywhere. Azure rejected it at its own provisioning step. The 162-function build before it had failed
-twice and gone through on the third try, so 162 is at the edge. Microsoft publishes no such limit and gives no
-inner error (open issues Azure/static-web-apps #1820, #1821, #1762 describe the same).
-- **Rule until the API moves to its own Function App:** don't add functions. Give an existing function another
-  HTTP method on its route (Delete PO is `DELETE po-ledger/po-edit`, beside `POST` for saving). The API test
-  `FunctionCountTests` fails above 162 (our functions plus the 4 OpenAPI ones; `functions.metadata` has the
-  real count).
+From about 23:00 UTC on 24 Nov, Azure refused every new API package for this Static Web App, in both
+environments: our 163-function build (test, five tries), a 162-function build of the same change (test), and the
+other session's 162-function main push (**prod**, 02:19 UTC), which was the last good build (c2bb340) plus a small
+fix. A refused deploy changes nothing (UI included), so prod and test kept running c2bb340. Application Insights
+shows Azure never started the refused packages: every host start logs `Generating N job function(s)`, and none
+appear for them. The block is in Azure's provisioning of the built-in API, not in our code. Microsoft gives no
+inner error; open issue Azure/static-web-apps #1820 ("same Static Web App accepts one package and rejects later
+packages") is the same thing, unanswered. Every deploy is blocked while it lasts, because the UI workflow ships the
+API each time.
+- **What we tried and ruled out:** the function count (162 is refused too), package size (14 MB zipped, as
+  before), route or name clashes (none), the database (the API doesn't touch it at start-up), and two deploys at
+  once (each deploy waits for the other).
+- **Kept anyway:** Delete PO shares the PO edit function (`DELETE po-ledger/po-edit`), and `FunctionCountTests`
+  stops the API growing past 162 functions (the most this app has deployed), so the count can be ruled out quickly
+  next time.
 - **How to look next time:** `az login --tenant <directory id>` (a browser sign-in; sign-in codes are blocked
-  in this directory), then query Application Insights for `traces | where message has "job function(s)"`.
+  in this directory). Then check `az staticwebapp environment list` (status Failed per environment) and query
+  Application Insights for `traces | where message has "job function(s)"` to see whether Azure started the build.
   The `Process reporting unhealthy … AzureWebJobsStorage` warnings are normal for this kind of API; ignore them.
-- **Lasting fix (not done yet):** merge related functions, or run the API on its own Function App
-  (`ShriyaMiningIndustries-api` / `-api-test`, stopped today), which has no such limit.
+- **Ways out:** retry later (what we did); ask Microsoft with the deployment IDs from the deploy log; or run the API
+  on its own Function App linked to the Static Web App. That needs the Standard plan, the only plan that allows a
+  linked API, and removes this failure point.
 
 **"degraded" health status / `Error Number:40613` / connection timeouts against SQL.**
 Azure SQL Serverless auto-pauses after 60 minutes idle (`autoPauseDelay: 60`, both databases).
