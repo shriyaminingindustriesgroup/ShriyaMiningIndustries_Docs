@@ -385,6 +385,8 @@ empty database from V001–V029 + `R__` and running it again (only the `R__` fil
   `database/migrations/V003__seed-initial-data.sql` for the exact permission grants per role.
 - **`app` schema** — Vendor, Buyer, Invoice + InvoiceLine, PO import records, company profile, and
   related master data.
+- **SKU catalog (V062, 26 Nov 2026)** — `sales.Sku`: every distinct SKU once (`SkuId` from 1, `Sku` unique ignoring
+  capitals, audit columns). Filled from the PO lines; insert only. Details in §7.15.
 - **Image library (V061, 25 Nov 2026)** — `app.ImageAsset` (one row per image, ID from 1001, audit columns, both
   SHA-256 fingerprints, names unique ignoring capitals) and `app.ImageAssetContent` (the stored image and its
   thumbnail, keyed by the same ID, so lists never read the bytes). Admin → Images; details in §7.14.
@@ -1443,6 +1445,27 @@ shown from the cache. `console/images` is never payload-logged (images are files
 backup storage); thumbnails are ~40 KB and cached, so viewing uses little of the Static Web App's 100 GB a month. Above
 32 GB the database would pay $0.138 per GB-month (General Purpose data stored, Central US, Azure Retail Prices API,
 25 Nov 2026); Blob Storage would be about $0.018. §12 says what to do near 32 GB.
+
+### 7.15 The SKU catalog (26 Nov 2026)
+
+The owner's request (plan/sku-catalog): one row per distinct SKU, so later features (admin-images D6: images mapped
+to SKUs) can point at a `SkuId`.
+- **Table** `sales.Sku` (V062): `SkuId INT IDENTITY(1,1)` (`PK_Sku`), `Sku NVARCHAR(200)` (`UX_Sku_Sku`; the
+  case-insensitive collation makes `ABC-1` and `abc-1` one SKU, the first spelling seen is kept; `CK_Sku_Sku`: stored
+  trimmed, never blank), CreatedOn/By, ModifiedOn/By, RowVersion. No soft delete: **insert only**, a SKU is never
+  changed or removed when a PO line is edited, removed or deleted.
+- **First load** (V062, once): the distinct trimmed non-blank SKUs of every PO line not soft-deleted (lines removed in a
+  later PO revision included: the SKU was ordered), in order of first appearance, CreatedBy `system`. The deploy log
+  prints `SKU catalog: N SKUs`.
+- **From then on:** `sales.usp_Sku_AddMissing` (`R__platform-20-po-import.sql`) adds the SKUs of the lines just written
+  that the catalog doesn't have (set-based, `UPDLOCK, HOLDLOCK`, so two uploads at once can't add the same SKU twice;
+  `UX_Sku_Sku` is the final guard). It runs **in the same transaction** as every PO-line writer: the spreadsheet upload
+  (`usp_POImport_Upsert`), the PDF / manual PO confirm (`usp_PurchaseOrder_Confirm`) and Edit PO when a deleted line
+  is restored (`usp_PurchaseOrder_Edit`). CreatedBy is the person who uploaded. No trigger, no new API function (161),
+  no screen yet.
+- **Test-data refresh:** `copy`, like every PO table (it is built from `sales.POLine`). **Go-live clean-up**
+  (`database/scripts/go-live-clear-business-data.sql`): cleared with the PO data and its numbering reset to 1.
+- **Cost:** $0 (a few hundred small rows in the existing database).
 
 ## 8. Authentication & authorization
 
