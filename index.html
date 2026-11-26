@@ -399,6 +399,10 @@ flowchart LR
   opens every screen at all 11 widths before a release.</p>
   <p><strong>Error messages (23 Nov):</strong> when something fails, people see a plain message ("The server had a problem answering. Please try again in a moment.") and a short reference to quote, never technical text. Failures the API never saw (a time-out in front of it) are reported by the browser and logged too, so Admin → Error logs finds every one by its reference (ARCHITECTURE §7.11 maps each technical failure to its message).</p>
   <p><strong>Insights (23 Nov):</strong> a dashboard for the people who run the business (Admin, Manager): invoiced and delivered against the previous period, money in each stage, the PO backlog, what needs attention (waiting for the buyer, rejected, not shipped, late or untouched POs), top buyers and products, what's ready to ship or on the water, and destinations. Every figure links to its list; worked out on request from the app's own data, so it adds no cost. Its <em>Invoice to POs</em> chart shows what POs ordered, how much is invoiced and what remains, by month, quarter, year or all time, for every product or one. Password boxes show the password with an eye inside the box.</p>
+  <p><strong>Deploys that retry (26 Nov):</strong> Azure has been refusing many API packages for a while ("Failed to
+  deploy the Azure Functions"; the same package goes through later). Deploys now retry that refusal by themselves (up to
+  5 tries), check the live site really serves the new API and UI builds, go to test first and then production, and list
+  every try in the run's summary. See ARCHITECTURE.md §12.</p>
   <p><strong>SKU images (26 Nov):</strong> Admin → <em>SKU images</em> attaches product photos to SKUs: pick a SKU, add
   up to 30 photos (compressed in the browser like Admin → Images), named <code>&lt;SKU&gt;_1</code>,
   <code>&lt;SKU&gt;_2</code>…, open them, select several and delete them. The same picture already in the library is linked,
