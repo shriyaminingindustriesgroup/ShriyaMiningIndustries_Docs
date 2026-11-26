@@ -399,6 +399,10 @@ flowchart LR
   opens every screen at all 11 widths before a release.</p>
   <p><strong>Error messages (23 Nov):</strong> when something fails, people see a plain message ("The server had a problem answering. Please try again in a moment.") and a short reference to quote, never technical text. Failures the API never saw (a time-out in front of it) are reported by the browser and logged too, so Admin → Error logs finds every one by its reference (ARCHITECTURE §7.11 maps each technical failure to its message).</p>
   <p><strong>Insights (23 Nov):</strong> a dashboard for the people who run the business (Admin, Manager): invoiced and delivered against the previous period, money in each stage, the PO backlog, what needs attention (waiting for the buyer, rejected, not shipped, late or untouched POs), top buyers and products, what's ready to ship or on the water, and destinations. Every figure links to its list; worked out on request from the app's own data, so it adds no cost. Its <em>Invoice to POs</em> chart shows what POs ordered, how much is invoiced and what remains, by month, quarter, year or all time, for every product or one. Password boxes show the password with an eye inside the box.</p>
+  <p><strong>SKU catalog (26 Nov):</strong> a new table, <code>sales.Sku</code>, keeps every distinct SKU once (ID from 1,
+  the SKU unique ignoring capitals). It was filled from the existing PO lines, and every PO upload, PDF or manual PO
+  adds any SKU it hasn't seen, in the same database step. Insert only; no screen yet (images will be mapped to SKUs
+  later). See ARCHITECTURE.md §7.15.</p>
   <p><strong>Images (25 Nov):</strong> Admin → <em>Images</em> is the image library, kept in the database: upload up to 30
   JPG/PNG at a time (each up to 500 MB as chosen; the browser makes large ones smaller first, at most 2560 px and 3 MB,
   with a 400 px preview), 50 previews a page, search by part of a name, a full-size viewer with Rename and Delete, and
