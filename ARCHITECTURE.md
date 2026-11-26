@@ -1910,6 +1910,13 @@ API each time.
     https://github.com/Azure/static-web-apps/issues/1820#issuecomment-7204482033. **Lead from that issue:** another user
     isolated the refusals to `dotnet-isolated:10.0` (the same API built for .NET 8 deploys). We stay on .NET 10: the
     Static Web App's .NET 8 support has ended and the standard is the latest stack. Watch the issue for Microsoft's fix.
+  - **Our own finding (26 Nov 2026):** every package carrying API 1e03769 was refused (about 20 deploys, both
+    environments, 21:36 to past 23:00 UTC, auto-retry included) while the package before it deployed that day. Its only
+    new shape was the Images route `console/{area:regex(^(images|skus)$)}/{id:int?}/{part?}/{sub:int?}` (a regex
+    constraint, four optional segments). Suspected, not proven: the route went back to the plain shape that deployed
+    (`console/images/{id?}/{part?}`, values parsed in code; SKU images under `console/images/skus`), the other regex route
+    (`console/users/{id}/{action}`) lost its constraint too, and `FunctionRouteTests` fails any route with `regex(` or
+    more than two optional segments. Keep this next to the .NET 10 lead above when talking to Microsoft.
   - **Phase 3 not taken (cost):** moving the API to a linked Function App on the Standard plan would remove this step
     (about $9 a month); the owner decided against it on 26 Nov 2026.
 
