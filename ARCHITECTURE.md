@@ -385,6 +385,8 @@ empty database from V001–V029 + `R__` and running it again (only the `R__` fil
   `database/migrations/V003__seed-initial-data.sql` for the exact permission grants per role.
 - **`app` schema** — Vendor, Buyer, Invoice + InvoiceLine, PO import records, company profile, and
   related master data.
+- **SKU images (V063, 26 Nov 2026)** — `sales.SkuImage`: one row per image linked to a SKU (its own ID from 1, FKs to
+  `sales.Sku` and `app.ImageAsset`, both NO ACTION, audit columns). Admin → SKU images; details in §7.16.
 - **SKU catalog (V062, 26 Nov 2026)** — `sales.Sku`: every distinct SKU once (`SkuId` from 1, `Sku` unique ignoring
   capitals, audit columns). Filled from the PO lines; insert only. Details in §7.15.
 - **Image library (V061, 25 Nov 2026)** — `app.ImageAsset` (one row per image, ID from 1001, audit columns, both
@@ -1464,8 +1466,36 @@ to SKUs) can point at a `SkuId`.
   is restored (`usp_PurchaseOrder_Edit`). CreatedBy is the person who uploaded. No trigger, no new API function (161),
   no screen yet.
 - **Test-data refresh:** `copy`, like every PO table (it is built from `sales.POLine`). **Go-live clean-up**
-  (`database/scripts/go-live-clear-business-data.sql`): cleared with the PO data and its numbering reset to 1.
+  (`database/scripts/go-live-clear-business-data.sql`): kept, with the SKU images (set-up work, §7.16). The script only
+  lists counts unless `@Confirm` is set to the confirmation phrase (26 Nov 2026; `GoLiveScriptTests`).
 - **Cost:** $0 (a few hundred small rows in the existing database).
+
+### 7.16 Admin → SKU images (26 Nov 2026)
+
+The owner's request (plan/sku-images; admin-images D6): product photos attached to SKUs.
+- **Screen** `/admin/sku-images` (`AdminSkuImages.vue`; Admin with `image.manage`; a card on the Admin page): the SKU
+  list (contains search, with/without images, 50 a page, "12 / 30 images") beside the chosen SKU's images (phones: the
+  list, then the images, with Back to SKUs). `?q=&filter=&page=&sku=` in the address. Add photos with the Admin →
+  Images upload panel in SKU mode: the same checks, fingerprint and compression; names are given by the server and shown
+  read-only; at most the room the SKU has left. Select → Delete selected, and the viewer.
+- **Rules:** at most **30 images per SKU**, enforced in the database (the writers lock the SKU's catalog row, then
+  count: two uploads at once at 29 let exactly one in). New images are named **`<SKU>_<n>`**, n = the highest number
+  any image name `<SKU>_<n>` in the library uses + 1, never reused or renumbered. The same picture (by fingerprint)
+  already on the SKU is skipped; elsewhere in the library it is **linked**, not copied, and keeps its name. Images live
+  in `app.ImageAsset` (so they're in Admin → Images too); the links in `sales.SkuImage` (V063). Removing unlinks, then
+  hard-deletes each image nothing else uses (`app.usp_ImageAsset_Delete`'s in-use check), else only unlinks it. Admin →
+  Images refuses to delete an image a SKU uses ("used by sales.SkuImage"), found by the generic foreign-key check.
+- **Procedures** (`R__platform-78-sku-images.sql`): `sales.usp_Sku_List`, `usp_SkuImage_List`, `_Prepare` (room left,
+  next number, each file on this SKU / in the library / new), `_AddNew`, `_LinkExisting`, `_Remove`, `_NextNumber`.
+- **API: no new function.** The `Images` function's route became
+  `console/{area:regex(^(images|skus)$)}/{id:int?}/{part?}/{sub:int?}` (image URLs unchanged): `GET console/skus`,
+  `GET/POST/DELETE console/skus/{id}/images` (`?check=1`, multipart add), `POST console/skus/{id}/images/{imageId}`
+  (link). Still **161** functions. Errors `SKU-NOT-FOUND`, `SKU-IMAGE-LIMIT` (409), `SKU-IMAGE-NAME-TOO-LONG`. Every
+  add, link and remove is logged; `console/skus` is never payload-logged.
+- **Test-data refresh:** `clear` (test's links are emptied: its images are kept, while SKU ids come from production).
+  **Go-live clean-up:** kept.
+- **Cost:** $0. Worst case 300 SKUs × 30 images × ~1.5 MB ≈ 13.5 GB, still inside the database's free 32 GB (the
+  Health Images tile shows the stored size); thumbnails keep browsing inside the Static Web App's 100 GB a month.
 
 ## 8. Authentication & authorization
 
@@ -1654,6 +1684,7 @@ max 1–2 hours/day), verified against real Azure pricing rather than assumed:
 | SQL Databases (both) | Azure SQL free offer applied (`useFreeLimit: true`, confirmed via `az sql db show`): 100,000 vCore-seconds + 32GB storage free per database per month, for the life of the subscription. At 0.5 vCore minimum, that's ≈55.6 hours of active compute free per database per month — comfortably covers the stated 1–2 hrs/day ceiling. Default behavior on exceeding the limit is auto-pause, not a surprise bill. |
 | Application Insights | Shared single instance across all four API deployments rather than one per environment — avoids multiplying ingestion volume for no benefit at this telemetry volume. |
 | This docs site (GitHub Pages) | Free for a public repo. |
+| SKU images (§7.16) | Kept in the same image tables: worst case ≈ 13.5 GB (300 SKUs × 30 images), inside the free 32 GB; no new resource, no new function. |
 | Image library (§7.14) | Stored in the database inside its free 32 GB (owner's 200–300 images ≈ 1 GB); no new resource. Above 32 GB: $0.138 per GB-month (General Purpose data, Central US, Azure Retail Prices API, 25 Nov 2026). Thumbnails are small and cached for a year, so viewing uses little of the Static Web App's 100 GB a month. |
 | Test-data refresh (§6.3) | GitHub Actions minutes in the private API repo (a ~1-minute check each day plus the run itself), inside the free monthly minutes. While it runs, both databases are awake: a weekly run uses a small part of each database's free 100,000 vCore-seconds; after the allowance, the same pay-as-you-go rate as any other use. Nothing runs between refreshes. |
 

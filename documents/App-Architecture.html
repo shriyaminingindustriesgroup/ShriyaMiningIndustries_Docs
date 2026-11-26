@@ -171,7 +171,7 @@
       <text x="850" y="590" text-anchor="middle" class="t">shriyaminingdbtest</text>
       <text x="850" y="607" text-anchor="middle" class="xs">test data</text>
     </g>
-    <text x="304" y="640" class="xs">Schema by DbUp migrations (V###, run once; R__ procedures, every deploy) · app logs in tables · image library (ImageAsset + bytes)</text>
+    <text x="304" y="640" class="xs">Schema by DbUp migrations (V###, run once; R__ procedures, every deploy) · logs in tables · image library + SKU images</text>
 
     <!-- Monitoring -->
     <rect x="288" y="662" width="754" height="134" rx="12" fill="#ffffff" stroke="#1f5f99" stroke-width="1.5"/>
@@ -309,7 +309,7 @@
     <thead><tr><th>Connection</th><th>What it's for</th><th>How the app connects</th><th>Secret kept in</th><th>Cost</th></tr></thead>
     <tbody>
       <tr><td>Static Web App (Azure)</td><td>Hosts the screens and the API for production and test; HTTPS; custom domain</td><td>GitHub Actions deploys with a deployment token; users reach it over HTTPS</td><td>GitHub secret</td><td>$0 (Free tier)</td></tr>
-      <tr><td>Azure SQL (2 databases)</td><td>All business data, users, sessions, logs, archive queue; the image library (Admin → Images: images and previews, ~1 GB expected)</td><td>API → SQL with a limited database user (stored procedures only)</td><td>SWA settings</td><td>Free offer; prod pays as you go only above it</td></tr>
+      <tr><td>Azure SQL (2 databases)</td><td>All business data, users, sessions, logs, archive queue; the image library (Admin → Images: images and previews, ~1 GB expected) and the SKU catalog with its images (Admin → SKU images)</td><td>API → SQL with a limited database user (stored procedures only)</td><td>SWA settings</td><td>Free offer; prod pays as you go only above it</td></tr>
       <tr><td>Application Insights + alerts</td><td>See errors and traffic; email when something breaks; budget warnings</td><td>API sends telemetry; 6 metric alerts → action group email</td><td>SWA settings (connection string)</td><td>$0 within free limits</td></tr>
       <tr><td>Zoho Mail (SMTP)</td><td>Invoice emails to buyers, password links, alert emails</td><td>SMTP login per sending service (MailKit)</td><td>SWA settings (app-specific password)</td><td>Existing Zoho plan</td></tr>
       <tr><td>Google Drive (archive)</td><td>Copy of each invoice's latest status PDF; every uploaded PO file</td><td>OAuth 2.0, scope <code>drive.file</code>, one-time Admin <i>Connect</i>; refresh token stored AES-GCM encrypted</td><td>SWA settings: client ID/secret, encryption key</td><td>$0 (15 GB free Google storage)</td></tr>
