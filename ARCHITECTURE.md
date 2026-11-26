@@ -1067,6 +1067,11 @@ the build and tests; the rest is reviewed. Each rule exists because of a real pr
 - [ ] Commit per story; fetch and rebase first (another session pushes to the same branches); push **test**
   first and watch its smoke test; **production only on the owner's go-ahead**. When the API and UI change
   together, release the side that accepts both shapes first.
+- [ ] **Releases (26 Nov 2026, plan/deployment-reliability):** every commit ends up live on BOTH test and production.
+  Push test and main together; the UI workflow deploys test first and production only once test serves the same builds
+  (DR-04). When a UI push follows an API release, put **`[ui-follows]`** in the API commit's message: the API then skips
+  its own nudge to the UI, so the release is 2 Static Web App deploys (test, production), not 4 (DR-03). Refusals retry by
+  themselves (§12); a red deploy after 5 attempts is re-run later, never ignored.
 - [ ] Cost: $0 unless agreed; prices from the Azure Retail Prices API before adding anything; no keep-alive
   calls to the database.
 - [ ] Errors (§7.11): people see a plain message, never technical text (screens show `error.message` or `messageOf()`);
@@ -1887,6 +1892,26 @@ API each time.
 - **Ways out:** retry later (what we did); ask Microsoft with the deployment IDs from the deploy log; or run the API
   on its own Function App linked to the Static Web App. That needs the Standard plan, the only plan that allows a
   linked API, and removes this failure point.
+- **Since 26 Nov 2026 (plan/deployment-reliability, Phase 1):**
+  - **How often:** 18–23 Nov 2 of 139 deploy runs needed a retry (1.4%); 25 Nov 12 of 21 (57%); 26 Nov 6 of 8, and all
+    four SKU-images deploys were refused. The same package succeeds on a later try (one run: attempts 1–3 refused,
+    4 deployed); package size (≈15 MB), function count (161) and overlapping deploys are ruled out.
+  - **Auto-retry (DR-01):** `scripts/deploy-swa.sh` (UI repo) runs the same client as the deploy action and retries
+    **only** this refusal: 5 attempts, waiting 2, 4, 8, 8 minutes. Any other failure stops at once.
+  - **What's live is checked (DR-02):** the smoke test waits for `/api/ping` to show the run's API commit and for
+    `index.html`'s `<meta name="smi-build">` to show its UI commit; a deploy that says "succeeded" but isn't live fails.
+  - **Test first (DR-04)**, one deploy per environment per release (DR-03, `[ui-follows]`, §7.8), and a run whose builds
+    are already live skips the deploy.
+  - **The job summary (DR-05)** lists every attempt, its result and the SWA deployment ID.
+  - **When all 5 attempts are refused:** nothing changed on the site. Re-run the failed job after 30–60 minutes; if it
+    keeps failing for hours, add the deployment IDs from the job summaries to the Microsoft issue below.
+  - **Escalation (Phase 2, done 26 Nov 2026):** our facts (rates, the same package refused then deployed, deployment IDs;
+    no app name, address or person) are on Azure/static-web-apps#1820:
+    https://github.com/Azure/static-web-apps/issues/1820#issuecomment-7204482033. **Lead from that issue:** another user
+    isolated the refusals to `dotnet-isolated:10.0` (the same API built for .NET 8 deploys). We stay on .NET 10: the
+    Static Web App's .NET 8 support has ended and the standard is the latest stack. Watch the issue for Microsoft's fix.
+  - **Phase 3 not taken (cost):** moving the API to a linked Function App on the Standard plan would remove this step
+    (about $9 a month); the owner decided against it on 26 Nov 2026.
 
 **"degraded" health status / `Error Number:40613` / connection timeouts against SQL.**
 Azure SQL Serverless auto-pauses after 60 minutes idle (`autoPauseDelay: 60`, both databases).
