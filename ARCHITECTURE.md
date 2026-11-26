@@ -1042,6 +1042,9 @@ the build and tests; the rest is reviewed. Each rule exists because of a real pr
   screens; on touch screens text boxes are 16 px (`--font-size-input-touch`, else iOS Safari zooms on every tap) and
   buttons at least 2.5rem tall.
 - [ ] `npm run type-check`, `npm run test` and `npm run build` pass.
+- [ ] The live site's Content-Security-Policy (`public/staticwebapp.config.json`, `globalHeaders`) allows what a new
+  library needs (WebAssembly: `'wasm-unsafe-eval'`; workers: `worker-src blob:`). `vite preview`, and so the browser
+  tests, send the same CSP (`vite.config.ts`), and `src/security-headers.test.js` checks it (25 Nov 2026).
 - [ ] A new or split-out component comes with a **component test** (24 Nov 2026, quality plan Q-03): Vitest +
   `@vue/test-utils`, with `// @vitest-environment happy-dom` at the top of that file only (everything else stays in the
   fast `node` environment). Mount through `src/test/mount.ts` (`mountWithApp`: a memory router, attached to the
@@ -1394,7 +1397,8 @@ mapped to crate types and SKUs, as link tables with a foreign key to the image.
 both granted to Admin by V061; a card on the Admin page):
 - **Upload** (`ImageUploadPanel`): choose or drop up to **30** JPG/PNG files, each up to **500 MB** as chosen. In the
   browser (`services/image-library.ts`), one at a time: type by its first bytes; SHA-256 of the file as chosen, read
-  8 MB at a time (`hash-wasm` 4.13.0, MIT); opened upright; a small image re-saved once (drops GPS metadata); a large
+  8 MB at a time (`hash-wasm` 4.13.0, MIT: WebAssembly, so the site's CSP has `'wasm-unsafe-eval'` in `script-src`,
+  which allows compiling WebAssembly only, never JavaScript `eval`); opened upright; a small image re-saved once (drops GPS metadata); a large
   one resized to 2560 px and stepped down (JPEG 0.85 → 0.78 → 0.70, then 2048 and 1600 px) until it is at most **3 MB**;
   a PNG with transparent areas stays PNG, a PNG photo becomes JPG (D2); a **400 px / 100 KB** thumbnail. Uploads go
   three at a time, with per-file status, Retry and a summary. The API takes at most 30 MB a request, which is why
@@ -1782,6 +1786,15 @@ GitHub secret holds something, name it — never paste the value.
 
 These are real incidents from building this system, kept here because they'll recur and the fix
 is non-obvious each time.
+
+**Every image upload says "couldn't read this file" on the live site, but works locally (25 Nov 2026).** The site's
+Content-Security-Policy (`public/staticwebapp.config.json`) had no `'wasm-unsafe-eval'`, so the browser refused to
+compile `hash-wasm`'s WebAssembly and the file fingerprint (Admin → Images) failed for every file. The dev server and
+the browser tests sent no CSP, so every local check passed. Fixed: `'wasm-unsafe-eval'` in `script-src` (WebAssembly
+only, not JavaScript eval); the error is now also written to the browser console ("Images: couldn't fingerprint …");
+`vite preview` sends the live CSP, so `npm run e2e` runs under it; and `src/security-headers.test.js` fails if the
+CSP loses it while `hash-wasm` is a dependency. **Lesson:** a CSP problem only shows on the deployed site unless the
+local server sends the same CSP; look in the browser console for "Refused to compile or instantiate WebAssembly".
 
 **The database nears its free 32 GB (the image library, §7.14).** Not expected at the owner's 200–300 images (~1 GB),
 but if Admin → Health's *Images* tile goes amber (over 20 GB stored) or the library grows past a few thousand images:
