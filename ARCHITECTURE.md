@@ -1027,6 +1027,8 @@ the build and tests; the rest is reviewed. Each rule exists because of a real pr
   cross-module bridges in `Api/Adapters`.
 - [ ] API conventions (§7.7): routes under `console/` (never `admin`), paged lists as `{ items, total,
   pagination }`, the one error envelope with a stable code and plain-words message, `rowVersion` → 409.
+  Function shapes Azure deploys (§12, `FunctionRouteTests`): an OpenApi Summary within 71 UTF-8 bytes, no `regex(`
+  route constraint, at most two optional segments, at most 162 functions.
 - [ ] Security: secrets only in app settings (never in a repo or these public docs); tokens stored hashed;
   changing requests carry `X-Requested-With: smi`; cookies use **Max-Age only (never Expires)** and are set
   **before** the response body (§8); no test-only endpoint answers in production.
@@ -1492,11 +1494,11 @@ The owner's request (plan/sku-images; admin-images D6): product photos attached 
   Images refuses to delete an image a SKU uses ("used by sales.SkuImage"), found by the generic foreign-key check.
 - **Procedures** (`R__platform-78-sku-images.sql`): `sales.usp_Sku_List`, `usp_SkuImage_List`, `_Prepare` (room left,
   next number, each file on this SKU / in the library / new), `_AddNew`, `_LinkExisting`, `_Remove`, `_NextNumber`.
-- **API: no new function.** The `Images` function's route became
-  `console/{area:regex(^(images|skus)$)}/{id:int?}/{part?}/{sub:int?}` (image URLs unchanged): `GET console/skus`,
-  `GET/POST/DELETE console/skus/{id}/images` (`?check=1`, multipart add), `POST console/skus/{id}/images/{imageId}`
-  (link). Still **161** functions. Errors `SKU-NOT-FOUND`, `SKU-IMAGE-LIMIT` (409), `SKU-IMAGE-NAME-TOO-LONG`. Every
-  add, link and remove is logged; `console/skus` is never payload-logged.
+- **API: no new function.** The `Images` function's route is `console/images/{id?}/{part?}` (values parsed in code;
+  image URLs unchanged) and SKU images sit under it: `GET console/images/skus`, `GET/POST/DELETE
+  console/images/skus/{id}` (`?check=1`, multipart add, `?link={imageId}` links a library image). Its OpenApi Summary
+  stays within 71 UTF-8 bytes (§12, the cause of the 26-27 Nov refusals). Still **161** functions. Errors `SKU-NOT-FOUND`, `SKU-IMAGE-LIMIT` (409), `SKU-IMAGE-NAME-TOO-LONG`. Every
+  add, link and remove is logged; like all of `console/images`, never payload-logged.
 - **Test-data refresh:** `clear` (test's links are emptied: its images are kept, while SKU ids come from production).
   **Go-live clean-up:** kept.
 - **Cost:** $0. Worst case 300 SKUs × 30 images × ~1.5 MB ≈ 13.5 GB, still inside the database's free 32 GB (the
@@ -1910,13 +1912,31 @@ API each time.
     https://github.com/Azure/static-web-apps/issues/1820#issuecomment-7204482033. **Lead from that issue:** another user
     isolated the refusals to `dotnet-isolated:10.0` (the same API built for .NET 8 deploys). We stay on .NET 10: the
     Static Web App's .NET 8 support has ended and the standard is the latest stack. Watch the issue for Microsoft's fix.
-  - **Our own finding (26 Nov 2026):** every package carrying API 1e03769 was refused (about 20 deploys, both
-    environments, 21:36 to past 23:00 UTC, auto-retry included) while the package before it deployed that day. Its only
-    new shape was the Images route `console/{area:regex(^(images|skus)$)}/{id:int?}/{part?}/{sub:int?}` (a regex
-    constraint, four optional segments). Suspected, not proven: the route went back to the plain shape that deployed
-    (`console/images/{id?}/{part?}`, values parsed in code; SKU images under `console/images/skus`), the other regex route
-    (`console/users/{id}/{action}`) lost its constraint too, and `FunctionRouteTests` fails any route with `regex(` or
-    more than two optional segments. Keep this next to the .NET 10 lead above when talking to Microsoft.
+  - **Cause found by bisect (27-28 Nov 2026): the length of one OpenApi Summary.** From the first SKU-images build
+    (API 1e03769), Azure refused every package, about 40 deploys in both environments over 26-27 Nov, auto-retry
+    included. The route fix (76c02d9: no regex constraint, two optional segments) was refused too. The bisect ran on
+    test only, with builds made in the Linux .NET 10 SDK container (same files as CI), each a throwaway pre-release:
+    | Package | Result (deployment ID) |
+    |---|---|
+    | a29b276, the last good build, redeployed | deployed, attempt 1 (07e43696-71dd-4aea-adb8-5cd311193536) |
+    | f1b1f9c, SKU images database and procedures | deployed, attempt 1 (4096fc88-3afd-4383-bc83-efb5cb4463ae) |
+    | f1b1f9c + the SKU images service and its registration | deployed, attempt 1 (6e45f124-3597-47bb-adb0-fdb461bfb62d) |
+    | 76c02d9 with the old `ImagesFunctions.cs` | deployed, attempt 1 (58395556-69ee-4e3d-812a-9dc7f38926b4) |
+    | 76c02d9 with only the Images OpenApi attributes restored | deployed, attempt 1 (f3e769c2-f006-4b4a-bed4-3ca1be491dee) |
+    | 76c02d9 with only the Images OpenApi **Summary** restored | deployed, attempt 1 (afb1f1ee-b4a9-4f70-996f-fce69b815950) |
+
+    The refused Summary was "The image library (Admin → Images) and SKU images (Admin → SKU images)": 74 UTF-8 bytes.
+    The longest Summary that had ever deployed is 71 bytes. The arrow isn't the cause, because the old Summary had one
+    too. The OpenApi parameter types aren't either: 11 functions document a Guid or int on an untyped segment and deploy.
+    The package's file list, `host.json`, `worker.config.json`, `extensions.json` and `functions.metadata` (apart from the
+    route) were identical between the accepted and refused builds. The refused package also starts under the local
+    Functions host (161 functions, `/api/ping` answers). So the limit sits in Azure's provisioning, and Microsoft gives
+    no inner error. **Fix (API 01957a6):** the Summary went down to 64 bytes. `FunctionRouteTests` now fails any OpenApi
+    Summary over 71 UTF-8 bytes and any typed route segment (`{id:int}`) documented as another type. It keeps the route
+    rules too (no `regex(`, at most two optional segments): they cost nothing. The ".NET 10" lead from the issue may be
+    the same limit seen another way.
+    **Next time this refusal won't clear:** redeploy the last good API release to test (UI workflow, manual run,
+    `api_release`). If that deploys, the package is the cause: bisect its commits the same way.
   - **Phase 3 not taken (cost):** moving the API to a linked Function App on the Standard plan would remove this step
     (about $9 a month); the owner decided against it on 26 Nov 2026.
 
