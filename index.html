@@ -403,6 +403,9 @@ flowchart LR
   deploy the Azure Functions"; the same package goes through later). Deploys now retry that refusal by themselves (up to
   5 tries), check the live site really serves the new API and UI builds, go to test first and then production, and list
   every try in the run's summary. See ARCHITECTURE.md §12.</p>
+  <p><strong>Why the SKU-images builds were refused (28 Nov):</strong> a step-by-step test on the test site found the
+  cause. It was one function's description (its OpenApi Summary), 74 bytes where the longest that had ever deployed was
+  71. Shortened to 64, with a test that keeps every Summary within 71 bytes. See ARCHITECTURE.md §12.</p>
   <p><strong>SKU images (26 Nov):</strong> Admin → <em>SKU images</em> attaches product photos to SKUs: pick a SKU, add
   up to 30 photos (compressed in the browser like Admin → Images), named <code>&lt;SKU&gt;_1</code>,
   <code>&lt;SKU&gt;_2</code>…, open them, select several and delete them. The same picture already in the library is linked,
